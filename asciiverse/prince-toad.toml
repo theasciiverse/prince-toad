@@ -7,7 +7,7 @@ year = 2026
 new = true
 license = "MIT"
 repo = "theasciiverse/prince-toad"
-provenance = "David Sandquist wrote the story of a prince who stays a toad, and Asciiverse made it into a lane-crossing game in Rust in 2026."
+provenance = "Asciiverse made Prince Toad in Rust in 2026, from a story by David Sandquist."
 topics = ["arcade", "lane-crossing", "story", "toad", "endless", "local-multiplayer", "gamepad", "rust"]
 genre = "arcade"
 
