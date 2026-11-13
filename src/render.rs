@@ -1483,33 +1483,115 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
     let ox = inner.x as i32 + inner.width as i32 - ow - 6;
     let oh = kiss.art.len() as i32;
     let ground = base + 7;
+    // each kiss has its own little after-effect (by kiss number)
+    let after = (t - 1.3).max(0.0);
+    let kissed = t > 1.3;
+    let shake = match g.kiss {
+        // the cactus and the duchess shake the scene
+        4 | 16 if kissed && after < 0.8 => {
+            if (t * 30.0) as i32 % 2 == 0 {
+                1
+            } else {
+                -1
+            }
+        }
+        _ => 0,
+    };
+    let art_colour = match g.kiss {
+        // the lamppost flickers
+        12 if kissed && after < 1.0 && (t * 14.0) as i32 % 3 == 0 => (60, 60, 50),
+        _ => kiss.color,
+    };
+    let moon_splashed = g.kiss == 13 && kissed;
     for (i, line) in kiss.art.iter().enumerate() {
-        cv.text(ox, ground - oh + 1 + i as i32, line, kiss.color, None);
+        let y = ground - oh + 1 + i as i32;
+        if moon_splashed && i < 3 {
+            // the moon was only a puddle: ripples where it was
+            let ripple = ["  ~ ~  ~", " ~  ~ ~ ~", "  ~  ~"][i];
+            cv.text(ox + shake, y, ripple, (120, 150, 200), None);
+            continue;
+        }
+        cv.text(ox + shake, y, line, art_colour, None);
     }
     // the toad hops over from the left
     let tw = 11;
     let start = inner.x as i32 + 2;
     let end = ox - tw;
     let k = (t / 1.2).min(1.0);
-    let tx = start + ((end - start) as f32 * k) as i32;
-    let hop = if k < 1.0 {
+    let mut tx = start + ((end - start) as f32 * k) as i32;
+    let mut hop = if k < 1.0 {
         ((t * 6.0).sin().abs() * 1.5) as i32
     } else {
         0
     };
+    let mut colour = TOAD1;
+    match g.kiss {
+        // the cow licks him clean: he shines
+        2 if kissed => colour = mix(TOAD1, (230, 250, 255), (after * 2.0).min(0.6)),
+        // the rubber duck squeaks and he jumps
+        7 if kissed && after < 0.6 => {
+            hop = (3.0 * (after / 0.6 * std::f32::consts::PI).sin()) as i32
+        }
+        // the heron, the dragon: he leaves, quickly
+        8 | 17 if after > 2.2 => tx -= ((after - 2.2) * 30.0) as i32,
+        // stuck to the icicle: he shivers
+        10 if kissed => tx += if (t * 20.0) as i32 % 2 == 0 { 1 } else { 0 },
+        _ => {}
+    }
     for (i, line) in TOAD_ART.iter().enumerate() {
-        cv.text(
-            tx,
-            ground - TOAD_ART.len() as i32 + 1 + i as i32 - hop,
-            line,
-            TOAD1,
-            None,
-        );
+        let y = ground - TOAD_ART.len() as i32 + 1 + i as i32 - hop;
+        if tx + 10 > inner.x as i32 + 1 {
+            for (j, ch) in line.chars().enumerate() {
+                let x = tx + j as i32 + shake;
+                if x > inner.x as i32 && ch != ' ' {
+                    cv.put(x, y, ch, colour, None);
+                }
+            }
+        }
     }
     for x in inner.x as i32..inner.right() as i32 {
         cv.put(x, ground + 1, '▔', (90, 130, 80), None);
     }
-    if t > 1.2 {
+    // extras
+    match g.kiss {
+        // a letter falls out of the mailbox
+        0 if kissed => {
+            let fy = (ground - 3 + (after * 4.0) as i32).min(ground);
+            cv.put(ox + 3, fy, '✉', (240, 240, 230), None);
+        }
+        // the cactus: ow
+        4 if kissed => {
+            for (j, (dx, dy)) in [(-1, -4), (9, -5), (-2, -1), (10, -2)].iter().enumerate() {
+                if after > j as f32 * 0.2 {
+                    cv.text(end + dx + shake, ground + dy, "ow", (250, 120, 90), None);
+                }
+            }
+        }
+        // the duchess screams
+        16 if kissed && after < 2.5 => {
+            let s = "A A A A H !";
+            let n = ((after * 12.0) as usize).min(s.len());
+            cv.text(ox - 4 + shake, ground - 7, &s[..n], (250, 110, 200), None);
+        }
+        // the dragon breathes smoke in its sleep
+        17 if kissed => {
+            for j in 0..4 {
+                let rise = ((after * 3.0) as i32 + j) % 5;
+                cv.put(
+                    ox + 16 + j % 2,
+                    ground - 3 - rise,
+                    ['o', 'O', '°', '~'][j as usize],
+                    (170, 170, 170),
+                    None,
+                );
+            }
+        }
+        // the fish splashes back down
+        6 if kissed && after < 1.5 => cv.text(ox, ground + 1, "~~ ~~ ~~", (120, 170, 230), None),
+        _ => {}
+    }
+    let end = end + shake;
+    if t > 1.2 && !matches!(g.kiss, 4 | 16) {
         // smack
         let n = ((t - 1.2) * 8.0) as i32;
         for j in 0..n.min(6) {
@@ -1519,9 +1601,9 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
                 cv.put(hx, hy, '♥', (240, 90, 120), None);
             }
         }
-        if t < 2.2 {
-            cv.text(end + 2, ground - 5, "smack!", GOLD, None);
-        }
+    }
+    if t > 1.2 && t < 2.2 {
+        cv.text(end + 2, ground - 5, "smack!", GOLD, None);
     }
     if t > 1.7 {
         let shown = (((t - 1.7) * 50.0) as usize).min(kiss.text.len());

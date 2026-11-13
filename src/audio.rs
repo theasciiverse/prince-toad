@@ -62,6 +62,8 @@ pub struct Audio {
     // the sink must outlive everything playing on its mixer
     sink: Option<MixerDeviceSink>,
     bank: Vec<SamplesBuffer>,
+    /// One little tune per world, for its card.
+    tunes: Vec<SamplesBuffer>,
     pub muted: bool,
     last: [Option<Instant>; ALL_SFX.len()],
     croak: usize,
@@ -88,9 +90,17 @@ impl Audio {
         } else {
             Vec::new()
         };
+        let tunes = if sink.is_some() {
+            (0..WORLD_TUNES.len())
+                .map(|w| buffer(world_tune(w)))
+                .collect()
+        } else {
+            Vec::new()
+        };
         Audio {
             sink,
             bank,
+            tunes,
             muted,
             last: [None; ALL_SFX.len()],
             croak: 0,
@@ -103,6 +113,7 @@ impl Audio {
         Audio {
             sink: None,
             bank: Vec::new(),
+            tunes: Vec::new(),
             muted: true,
             last: [None; ALL_SFX.len()],
             croak: 0,
@@ -125,6 +136,16 @@ impl Audio {
         }
         self.last[i] = Some(now);
         sink.mixer().add(self.bank[i].clone());
+    }
+
+    /// The tune of world w, on its card.
+    pub fn world(&mut self, w: usize) {
+        if self.muted {
+            return;
+        }
+        if let (Some(sink), Some(tune)) = (&self.sink, self.tunes.get(w)) {
+            sink.mixer().add(tune.clone());
+        }
     }
 
     /// A croak per hop, never quite the same twice in a row.
@@ -205,6 +226,88 @@ fn croak(base: f32, dur: f32, gain: f32) -> Vec<f32> {
         let env = (t / 0.008).min(1.0) * (1.0 - t / dur).max(0.0);
         lp * pulse * env * gain
     })
+}
+
+/// Seven short tunes of our own, one per world: (midi note, beats), 0 a rest.
+const WORLD_TUNES: [&[(f32, f32)]; 7] = [
+    // the village: a skipping country tune
+    &[
+        (67.0, 0.5),
+        (72.0, 0.5),
+        (72.0, 0.5),
+        (74.0, 0.5),
+        (76.0, 1.0),
+        (72.0, 0.5),
+        (0.0, 0.5),
+        (79.0, 1.5),
+    ],
+    // the highway: busy and bright
+    &[
+        (72.0, 0.25),
+        (72.0, 0.25),
+        (79.0, 0.5),
+        (77.0, 0.25),
+        (76.0, 0.25),
+        (74.0, 0.5),
+        (72.0, 0.5),
+        (84.0, 1.0),
+    ],
+    // the river: rolling
+    &[
+        (64.0, 0.5),
+        (67.0, 0.5),
+        (71.0, 0.5),
+        (69.0, 0.5),
+        (67.0, 0.5),
+        (64.0, 0.5),
+        (66.0, 0.5),
+        (67.0, 1.5),
+    ],
+    // winter: high and slow
+    &[
+        (81.0, 0.75),
+        (79.0, 0.75),
+        (76.0, 0.75),
+        (74.0, 0.75),
+        (76.0, 2.0),
+    ],
+    // the night: low and a little sly
+    &[
+        (57.0, 0.5),
+        (60.0, 0.5),
+        (0.0, 0.25),
+        (59.0, 0.25),
+        (57.0, 0.5),
+        (64.0, 0.5),
+        (63.0, 0.5),
+        (57.0, 1.5),
+    ],
+    // the castle: a fanfare of sorts
+    &[
+        (67.0, 0.33),
+        (67.0, 0.33),
+        (67.0, 0.33),
+        (72.0, 1.0),
+        (71.0, 0.5),
+        (72.0, 0.5),
+        (76.0, 1.5),
+    ],
+    // the pond: soft
+    &[
+        (76.0, 1.0),
+        (74.0, 0.5),
+        (72.0, 0.5),
+        (74.0, 1.0),
+        (79.0, 0.5),
+        (76.0, 2.0),
+    ],
+];
+
+fn world_tune(w: usize) -> Vec<f32> {
+    let beat = if w == 3 || w == 6 { 0.3 } else { 0.22 };
+    let notes: Vec<(f32, f32)> = WORLD_TUNES[w].iter().map(|&(n, b)| (n, b * beat)).collect();
+    let wave = if w == 3 || w == 6 { tri } else { square };
+    tune(&notes, 0.15, wave)
 }
 
 fn render_sfx(s: Sfx) -> Vec<f32> {
@@ -343,6 +446,9 @@ mod tests {
 
     #[test]
     fn sounds_render_and_stay_in_range() {
+        for w in 0..WORLD_TUNES.len() {
+            assert!(world_tune(w).iter().all(|x| x.abs() <= 1.0));
+        }
         for s in ALL_SFX {
             let v = render_sfx(s);
             assert!(!v.is_empty(), "{s:?}");

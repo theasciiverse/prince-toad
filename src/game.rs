@@ -666,6 +666,7 @@ impl Game {
         }
         match self.phase {
             Phase::Play => self.play_tick(audio),
+            Phase::WorldCard if (self.phase_t - DT).abs() < 1e-4 => audio.world(self.world),
             Phase::WorldCard if self.demo && self.phase_t > 2.5 => self.set_phase(Phase::Play),
             Phase::Crossed if self.phase_t > 0.7 => {
                 if self.mode == Mode::Story {

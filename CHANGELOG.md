@@ -9,6 +9,9 @@
   its own best score
 - Two players together: both toads on the endless road, and the road is
   done only when both are across
+- Livelier kiss scenes: the cow licks him shiny, the cactus says ow, the
+  duchess screams, the dragon puffs smoke, and he leaves the heron quickly
+- A little tune of its own for every world
 - Tighter clocks on every crossing
 
 ## 0.5.0
