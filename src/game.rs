@@ -932,7 +932,9 @@ impl Game {
                     if p.score > self.save.best_story {
                         self.save.best_story = p.score;
                     }
-                    self.persist();
+                    if !self.demo {
+                        self.save.store();
+                    }
                 }
                 if self.mode != Mode::Story {
                     let who = if two { who(i) } else { "He" };
