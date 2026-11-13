@@ -1,0 +1,27 @@
+[package]
+name = "prince-toad"
+version = "0.5.0"
+edition = "2024"
+license = "MIT"
+description = "Asciiverse lane-crossing game: a prince turned toad crosses road after road looking for a kiss, Rust + Ratatui"
+
+[[bin]]
+name = "prince-toad"
+path = "src/main.rs"
+
+[dependencies]
+ratatui = "0.30"
+log = "0.4"
+env_logger = "0.11"
+rodio = { version = "0.22", default-features = false, features = ["playback"] }
+gilrs = { version = "0.11", optional = true, default-features = false, features = ["xinput"] }
+
+[features]
+default = ["gamepad"]
+gamepad = ["dep:gilrs"]
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+debug = 1
