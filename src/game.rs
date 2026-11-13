@@ -459,7 +459,7 @@ impl Game {
                 audio.toggle_mute();
                 self.save.muted = audio.muted;
                 self.muted = audio.muted;
-                self.save.store();
+                self.persist();
                 self.flash(if audio.muted { "Sound off" } else { "Sound on" });
                 return;
             }
@@ -494,7 +494,7 @@ impl Game {
                         audio.toggle_mute();
                         self.save.muted = audio.muted;
                         self.muted = audio.muted;
-                        self.save.store();
+                        self.persist();
                     }
                     _ => {
                         self.overlay = None;
@@ -640,9 +640,16 @@ impl Game {
             audio.toggle_mute();
             self.save.muted = audio.muted;
             self.muted = audio.muted;
-            self.save.store();
+            self.persist();
         } else {
             self.exit = true;
+        }
+    }
+
+    /// Write the save, unless this is the demo playing.
+    fn persist(&self) {
+        if !self.demo {
+            self.save.store();
         }
     }
 
@@ -700,7 +707,7 @@ impl Game {
         self.load_story(next);
         if self.save.reached < next {
             self.save.reached = next;
-            self.save.store();
+            self.persist();
         }
         if world_changes {
             self.set_phase(Phase::WorldCard);
@@ -831,7 +838,7 @@ impl Game {
                             self.save.daily_best = self.save.daily_best.max(s);
                         }
                         self.save.best_endless = self.save.best_endless.max(s);
-                        self.save.store();
+                        self.persist();
                     }
                     self.set_phase(Phase::GameOver);
                 }
@@ -925,7 +932,7 @@ impl Game {
                     if p.score > self.save.best_story {
                         self.save.best_story = p.score;
                     }
-                    self.save.store();
+                    self.persist();
                 }
                 if self.mode != Mode::Story {
                     let who = if two { who(i) } else { "He" };
@@ -1035,7 +1042,7 @@ impl Game {
                     self.save.best_story = self.players[0].score;
                 }
                 self.save.finished = true;
-                self.save.store();
+                self.persist();
                 self.set_phase(Phase::Finale(0));
             }
         } else if alive && near && pr.since > 0.8 {

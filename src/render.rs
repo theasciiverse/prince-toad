@@ -1244,7 +1244,7 @@ fn title(cv: &mut Canvas, g: &Game) {
         };
         cv.text(
             mx,
-            top + 10 + i as i32,
+            top + 9 + i as i32,
             &s,
             if sel { TOAD1 } else { DIM },
             None,
@@ -1254,9 +1254,14 @@ fn title(cv: &mut Canvas, g: &Game) {
         "Best story score {}    Best on the endless road {}",
         g.save.best_story, g.save.best_endless
     );
-    cv.centre(top + 18, &best, (110, 130, 110), None);
-    // a little road at the bottom, with traffic
+    let best_y = top + 10 + items.len() as i32;
+    cv.centre(best_y, &best, (110, 130, 110), None);
+    // a little road at the bottom, with traffic, where there is room
     let y = a.bottom() as i32 - 4;
+    if y - 2 <= best_y {
+        draw_title_footer(cv);
+        return;
+    }
     let lanes = [
         Lane::new(
             Ground::Road,
@@ -1318,6 +1323,11 @@ fn title(cv: &mut Canvas, g: &Game) {
     // a toad waiting to cross
     let hop = (t * 0.8) as i32 % 6 == 0;
     cv.text(fx0 + 38, y + if hop { 1 } else { 2 }, "▙▟", TOAD1, None);
+    draw_title_footer(cv);
+}
+
+fn draw_title_footer(cv: &mut Canvas) {
+    let a = cv.area;
     let v = game_version();
     cv.text(
         a.right() as i32 - v.len() as i32 - 2,
@@ -1719,7 +1729,7 @@ fn help(cv: &mut Canvas, g: &Game) {
         ("Sound", "M or F8"),
         ("This help", "H or F1"),
         ("Two players", "one: W A S D, two: arrows"),
-        ("Gamepad", "d-pad or stick hops, A goes on, Start pauses"),
+        ("Gamepad", "d-pad or stick hops, A on, Start pause"),
         ("", ""),
         ("Roads", "do not touch anything that moves"),
         ("Water", "stay on logs, floes and barrels"),
