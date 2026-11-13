@@ -7,9 +7,13 @@ CLAUDE.md files): no em-dashes or en-dashes anywhere, store text describes
 the game and nothing defensive, commits as `David <sandquist@gmail.com>`
 ending with the Co-Authored-By line, versions 0.x.0 while unfinished.
 
-**Status:** 2026-11-13/14, built overnight on rover. 0.5.0: the whole story
-plays, first road to the pond, with eighteen kisses and the finale; endless
-road and two-player race are in. See ROADMAP.md for what 1.0 still wants.
+**Status:** built overnight on rover, 2026-11-13/14. Tagged and released
+v0.5.0 (the whole story, first road to the pond), v0.6.0 (trains, flies,
+today's road, two players together, livelier kiss scenes, world tunes)
+and v0.7.0 (fog and plank crossings on the endless road). Nobody has
+played it yet but the solver and the demo; speeds and clocks want a human
+hand (ROADMAP.md). Waiting on David: the name check below, and going
+public (hub's `tools/go-public.sh --run`, then re-push the newest tag).
 
 ## David's notes (copied from games/prince-toad/CLAUDE.md on the main machine)
 
