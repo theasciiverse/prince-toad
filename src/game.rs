@@ -22,6 +22,11 @@ pub fn today() -> u64 {
         .unwrap_or(0)
 }
 
+/// What the players are called.
+pub fn who(i: usize) -> &'static str {
+    if i == 0 { "Player one" } else { "Player two" }
+}
+
 pub fn version_string() -> String {
     format!("Prince Toad {}", env!("CARGO_PKG_VERSION"))
 }
@@ -31,6 +36,8 @@ pub enum Mode {
     Story,
     Endless,
     Versus,
+    /// Two toads on the endless road together: both must get across.
+    Together,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -67,6 +74,8 @@ pub struct Player {
     pub dead: Option<(Death, f32)>,
     pub queued: Option<(Dir, u32)>,
     pub crossings: u32,
+    /// Across and waiting for the other toad (together mode).
+    pub home: bool,
     pub start_x: f32,
     next_life: u32,
 }
@@ -83,6 +92,7 @@ impl Player {
             dead: None,
             queued: None,
             crossings: 0,
+            home: false,
             start_x,
             next_life: EXTRA_LIFE,
         }
@@ -94,6 +104,7 @@ impl Player {
         self.time_left = time;
         self.dead = None;
         self.queued = None;
+        self.home = false;
     }
 }
 
@@ -165,6 +176,7 @@ pub enum Start {
     Story(usize),
     Endless,
     Versus,
+    Together,
     /// The demo, from this crossing.
     Demo(usize),
 }
@@ -214,6 +226,7 @@ impl Game {
             Start::Story(n) => g.start_story(n.min(POND), false),
             Start::Endless => g.start_endless(),
             Start::Versus => g.start_versus(),
+            Start::Together => g.start_together(),
             Start::Demo(n) => {
                 g.demo = true;
                 g.start_story(n.min(POND - 1), false);
@@ -245,7 +258,8 @@ impl Game {
         v.push("A new story".into());
         v.push("The endless road".into());
         v.push("Today's road".into());
-        v.push("Two players".into());
+        v.push("Two players: a race".into());
+        v.push("Two players: together".into());
         if self.save.reached > 0 {
             v.push("Choose a crossing".into());
         }
@@ -311,7 +325,7 @@ impl Game {
         self.fly_clock = 0.0;
         self.rang = vec![false; self.level.height()];
         self.kiss = (self.seed as usize + n * 7) % (KISSES.len() - 1);
-        let xs: Vec<f32> = if self.mode == Mode::Versus {
+        let xs: Vec<f32> = if self.two() {
             vec![30.0, 46.0]
         } else {
             vec![START_X]
@@ -342,6 +356,21 @@ impl Game {
         self.daily = true;
         self.players = vec![];
         self.seed = today() * 7_919 + 17;
+        let made = endless::make(0, self.seed);
+        self.load_made(made, 0);
+        self.set_phase(Phase::Play);
+    }
+
+    /// Two players, one game.
+    pub fn two(&self) -> bool {
+        matches!(self.mode, Mode::Versus | Mode::Together)
+    }
+
+    pub fn start_together(&mut self) {
+        self.mode = Mode::Together;
+        self.daily = false;
+        self.players = vec![];
+        self.seed = self.seed.wrapping_add(1);
         let made = endless::make(0, self.seed);
         self.load_made(made, 0);
         self.set_phase(Phase::Play);
@@ -530,11 +559,7 @@ impl Game {
             },
             Phase::Play => match e {
                 Ev::Hop(p, d) => {
-                    let p = if self.mode == Mode::Versus {
-                        p.min(1)
-                    } else {
-                        0
-                    };
+                    let p = if self.two() { p.min(1) } else { 0 };
                     if let Some(pl) = self.players.get_mut(p)
                         && pl.dead.is_none()
                     {
@@ -563,6 +588,8 @@ impl Game {
                         self.players[0].score = score;
                         self.load_story(n);
                         self.set_phase(Phase::WorldCard);
+                    } else if self.mode == Mode::Together {
+                        self.start_together();
                     } else if self.daily {
                         self.start_daily();
                     } else {
@@ -602,8 +629,10 @@ impl Game {
             self.start_endless();
         } else if item.starts_with("Today") {
             self.start_daily();
-        } else if item.starts_with("Two players") {
+        } else if item.starts_with("Two players: a race") {
             self.start_versus();
+        } else if item.starts_with("Two players: together") {
+            self.start_together();
         } else if item.starts_with("Choose") {
             self.choose = self.save.reached.min(POND);
             self.set_phase(Phase::Choose);
@@ -681,11 +710,7 @@ impl Game {
 
     fn next_endless(&mut self) {
         let n = self.level_no + 1;
-        let d = if self.mode == Mode::Versus {
-            n as u32 + 1
-        } else {
-            n as u32
-        };
+        let d = if self.two() { n as u32 + 1 } else { n as u32 };
         let made = endless::make(d, self.seed.wrapping_add(n as u64));
         self.load_made(made, n);
         self.set_phase(Phase::Play);
@@ -761,7 +786,12 @@ impl Game {
     fn player_tick(&mut self, i: usize, t: f32, audio: &mut Audio) {
         let time = self.time;
         let story = self.mode == Mode::Story;
+        let two = self.two();
+        let other_alive = (0..self.players.len()).any(|j| j != i && self.players[j].lives > 0);
         let p = &mut self.players[i];
+        if p.home || (self.mode == Mode::Together && p.lives == 0) {
+            return;
+        }
         if let Some((cause, dt)) = &mut p.dead {
             *dt += DT;
             let wait = if *cause == Death::Splash { 0.6 } else { 1.0 };
@@ -771,10 +801,25 @@ impl Game {
                 } else if p.lives > 1 {
                     p.lives -= 1;
                     p.respawn(&self.level, time);
+                } else if self.mode == Mode::Together && other_alive {
+                    // out, but the other toad carries on
+                    let p = &mut self.players[i];
+                    p.lives = 0;
+                    p.dead = None;
+                    self.msg = Some((
+                        format!(
+                            "{} is out of lives. Carry on, {}!",
+                            who(i),
+                            who(1 - i).to_lowercase()
+                        ),
+                        3.0,
+                    ));
+                    self.check_together(audio);
                 } else {
+                    let p = &mut self.players[i];
                     p.lives = 0;
                     audio.play(Sfx::GameOver);
-                    if self.mode == Mode::Endless {
+                    if self.mode == Mode::Endless || self.mode == Mode::Together {
                         let s = p.score;
                         if self.daily {
                             let day = today();
@@ -882,11 +927,7 @@ impl Game {
                     self.save.store();
                 }
                 if self.mode != Mode::Story {
-                    let who = match (self.mode, i) {
-                        (Mode::Versus, 0) => "Player one",
-                        (Mode::Versus, _) => "Player two",
-                        _ => "He",
-                    };
+                    let who = if two { who(i) } else { "He" };
                     self.msg = Some((
                         format!("{who} kisses {}. Still a toad.", KISSES[self.kiss].name),
                         2.5,
@@ -895,6 +936,10 @@ impl Game {
                 if self.mode == Mode::Versus && p.crossings >= RACE_TO {
                     self.set_phase(Phase::Won(i));
                     audio.play(Sfx::Fanfare);
+                } else if self.mode == Mode::Together {
+                    p.home = true;
+                    p.toad.air = 99;
+                    self.check_together(audio);
                 } else {
                     self.set_phase(Phase::Crossed);
                 }
@@ -907,6 +952,20 @@ impl Game {
             p.lives += 1;
             audio.play(Sfx::Life);
             self.msg = Some(("An extra life!".into(), 2.0));
+        }
+    }
+
+    /// Together: on to the next road once every toad still playing is across.
+    fn check_together(&mut self, _audio: &mut Audio) {
+        let playing: Vec<&Player> = self.players.iter().filter(|p| p.lives > 0).collect();
+        if !playing.is_empty() && playing.iter().all(|p| p.home) {
+            log::info!("both toads across road {}", self.level_no + 1);
+            self.set_phase(Phase::Crossed);
+        } else if playing.iter().any(|p| p.home) {
+            self.msg = Some((
+                "Across! Waiting on the bank for the other toad.".into(),
+                2.5,
+            ));
         }
     }
 
@@ -1083,6 +1142,30 @@ mod tests {
         g.players[0].toad.row = prow;
         g.princess_tick(&mut audio);
         assert_eq!(g.phase, Phase::Finale(0));
+    }
+
+    #[test]
+    fn together_waits_for_both_toads() {
+        let mut g = game(Start::Together);
+        let mut audio = Audio::silent();
+        let mut input = Input::new();
+        // only player one hops: across, but the road does not end
+        for _ in 0..60 {
+            input.events.push(Ev::Hop(0, Dir::Up));
+            g.handle(&mut input, &mut audio);
+            for _ in 0..HOP_TICKS {
+                g.tick(&mut audio);
+            }
+            if g.players[0].home {
+                break;
+            }
+        }
+        if g.players[0].home {
+            assert_eq!(g.phase, Phase::Play, "still waiting for player two");
+            g.players[1].lives = 0;
+            g.check_together(&mut audio);
+            assert_eq!(g.phase, Phase::Crossed, "player two is out, so on we go");
+        }
     }
 
     #[test]

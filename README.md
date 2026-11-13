@@ -9,7 +9,8 @@ she turns out to be a toad too.
 A lane-crossing arcade game for the terminal, in seven worlds: village
 lanes, the highway, the river, the winter road, the night road lit by
 headlights, the castle and its moat, and a quiet pond at the end. Plus an
-endless road and a two-player race at one keyboard.
+endless road, today's road (the same for everyone today), and two players
+at one keyboard, racing or crossing together.
 
 ## Controls
 
@@ -28,7 +29,7 @@ land on them.
 ## Options
 
 ```
-prince-toad [--endless] [--two] [--crossing N] [--demo] [--mute]
+prince-toad [--endless] [--two] [--together] [--crossing N] [--demo] [--mute]
 ```
 
 Progress and settings are kept in `$XDG_STATE_HOME/prince-toad/save.txt`

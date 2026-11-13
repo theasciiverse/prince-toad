@@ -82,7 +82,11 @@ with the plain word; nothing found by web search so far.
   worlds in turn; each one checked with the solver before it is played.
   Best score saved.
 - **Two players:** a race on generated roads, W A S D against the arrows
-  (or two gamepads); first to five crossings wins.
+  (or two gamepads); first to five crossings wins. Or together: both on the
+  endless road, a road is done when every toad with lives left is across.
+- **Today's road** (0.6): the endless road from a seed of the date, with
+  its own best score. Trains with a bell and blinking lights (rail lanes),
+  flies to eat for 200.
 - Lives (5, extra every 5000), a clock per crossing, score (10 a new row,
   50 plus 10 a second left per crossing, 1000 for the princess). Game over
   lets you retry the crossing with fresh lives and half the score.

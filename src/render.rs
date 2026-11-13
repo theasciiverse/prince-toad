@@ -1056,6 +1056,27 @@ fn hud(cv: &mut Canvas, g: &Game) {
     cv.fill(Rect::new(a.x, a.y, a.width, 1), bg);
     let x0 = a.x as i32 + 1;
     match g.mode {
+        Mode::Together => {
+            let p1 = &g.players[0];
+            let s = format!(" ▙▟×{} {:06}", p1.lives, p1.score);
+            cv.text(x0, y, &s, TOAD1, None);
+            cv.centre(
+                y,
+                &format!("Road {}   both toads across", g.level_no + 1),
+                DIM,
+                None,
+            );
+            if let Some(p2) = g.players.get(1) {
+                let s2 = format!("{:06} ▙▟×{} ", p2.score, p2.lives);
+                cv.text(
+                    a.right() as i32 - s2.chars().count() as i32 - 1,
+                    y,
+                    &s2,
+                    TOAD2,
+                    None,
+                );
+            }
+        }
         Mode::Versus => {
             let p1 = g.players[0].crossings;
             let p2 = g.players.get(1).map_or(0, |p| p.crossings);
@@ -1134,6 +1155,9 @@ fn hud(cv: &mut Canvas, g: &Game) {
             ),
             Mode::Endless => format!("Best on the endless road: {}", g.save.best_endless),
             Mode::Versus => "Player one: W A S D    Player two: arrows".to_string(),
+            Mode::Together => {
+                "Both toads must get across. Player one: W A S D, player two: arrows".to_string()
+            }
         },
     };
     cv.text(

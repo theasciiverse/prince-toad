@@ -34,7 +34,9 @@ A prince has been turned into a toad. Only a kiss can turn him back, and
 whoever he might kiss is always on the other side of the road.
 
   --endless         straight onto the endless road
-  --two             two players at one keyboard (W A S D against the arrows)
+  --two             two players racing at one keyboard (W A S D against the
+                    arrows)
+  --together        two players on the endless road together
   --crossing N      start the story at crossing N (1-19; 19 is the pond)
   --demo            watch the toad cross the story by itself (with
                     --crossing, from there)
@@ -90,6 +92,7 @@ fn parse_args() -> Result<Option<Args>, String> {
             }
             "--endless" => a.start = Start::Endless,
             "--two" => a.start = Start::Versus,
+            "--together" => a.start = Start::Together,
             "--demo" => {
                 a.start = match a.start {
                     Start::Story(n) => Start::Demo(n),

@@ -7,6 +7,8 @@
 - Flies land now and then; eat one for 200 points
 - Today's road: an endless road that is the same for everyone today, with
   its own best score
+- Two players together: both toads on the endless road, and the road is
+  done only when both are across
 - Tighter clocks on every crossing
 
 ## 0.5.0
