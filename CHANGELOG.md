@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- Fog on the endless road now and then: only the lanes near you can be
+  seen
+- Old planks in the water to rest on, on the endless road
+- The demo never touches your save
+- The title fits every item at 80x24
+
 ## 0.6.0
 
 - Railway crossings: a train comes through now and then, with a bell and

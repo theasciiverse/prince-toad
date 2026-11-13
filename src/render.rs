@@ -877,6 +877,28 @@ fn field(cv: &mut Canvas, g: &Game) {
             }
         }
     }
+    // fog: lanes far from every toad fade into grey
+    if g.fog {
+        let rows: Vec<i32> = g.players.iter().map(|p| p.toad.row as i32).collect();
+        for r in 0..lv.height() as i32 {
+            let d = rows.iter().map(|&tr| (tr - r).abs()).min().unwrap_or(0);
+            let k = ((d as f32 - 1.5) / 2.5).clamp(0.0, 0.92);
+            if k <= 0.0 {
+                continue;
+            }
+            let y = gm.fy0 + r;
+            for x in a.x as i32..a.right() as i32 {
+                let cell = &mut cv.buf[(x as u16, y as u16)];
+                let fog = |rgb: Rgb| mix(rgb, (168, 172, 176), k);
+                if let Color::Rgb(r_, g_, b_) = cell.fg {
+                    cell.fg = c(fog((r_, g_, b_)));
+                }
+                if let Color::Rgb(r_, g_, b_) = cell.bg {
+                    cell.bg = c(fog((r_, g_, b_)));
+                }
+            }
+        }
+    }
     // night: everything outside the lights goes dark
     if let Some(light) = light {
         let mut toads: Vec<(i32, i32)> = g
@@ -1796,6 +1818,12 @@ mod tests {
                 assert!(s.contains("PRINCE TOAD"));
             }
         }
+        let mut g = Game::new(Start::Endless, Save::default());
+        g.fog = true;
+        assert!(
+            screen(&g, 100, 30).contains("▙▟"),
+            "the toad shows through the fog"
+        );
         let g = Game::new(Start::Title, Save::default());
         assert!(screen(&g, 100, 30).contains("A new story"));
         assert!(screen(&g, 60, 20).contains("needs 80x24"));

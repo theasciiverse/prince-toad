@@ -141,6 +141,7 @@ pub struct Game {
     pub name: String,
     pub world: usize,
     pub night: bool,
+    pub fog: bool,
     pub time: f32,
     /// Which kiss waits on the far side (story), or a random one.
     pub kiss: usize,
@@ -199,6 +200,7 @@ impl Game {
             name: spec.name.to_string(),
             world: 0,
             night: false,
+            fog: false,
             time: spec.time,
             kiss: 0,
             lt: 0,
@@ -278,6 +280,7 @@ impl Game {
         self.name = spec.name.to_string();
         self.world = spec.world;
         self.night = spec.night;
+        self.fog = false;
         self.time = spec.time;
         self.kiss = spec.kiss;
         self.lt = 0;
@@ -315,6 +318,10 @@ impl Game {
         self.level = made.level;
         self.world = made.world;
         self.night = made.night;
+        self.fog = made.fog;
+        if made.fog {
+            self.msg = Some(("Fog on the road. Look sharp.".into(), 3.0));
+        }
         self.time = made.time;
         self.level_no = n;
         self.name = format!("Road {}", n + 1);

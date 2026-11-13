@@ -37,6 +37,8 @@ pub struct Made {
     pub level: Level,
     pub world: usize,
     pub night: bool,
+    /// Fog: only the lanes near the toads can be seen.
+    pub fog: bool,
     pub time: f32,
 }
 
@@ -114,6 +116,7 @@ pub fn make(d: u32, seed: u64) -> Made {
         let d = if attempt >= 20 { d / 2 } else { d };
         let world = ((d / 3) % 6) as usize;
         let night = world == 4;
+        let fog = matches!(world, 0 | 2) && d >= 4 && rng.chance(0.3);
         let lanes_total = (4 + d.min(10)) as usize;
         let speed_base = 2.5 + d.min(20) as f32 * 0.35;
         let road_ground = match world {
@@ -140,7 +143,22 @@ pub fn make(d: u32, seed: u64) -> Made {
             let wet = d >= 2 && rng.chance(if world == 2 { 0.7 } else { 0.35 });
             for _ in 0..block {
                 dir = -dir;
-                if wet {
+                if wet && world != 3 && rng.chance(0.15) {
+                    // stepping stones of old planks, going nowhere
+                    let mut p = vec!['.'; 100];
+                    for _ in 0..2 + rng.below(3) {
+                        let x = rng.below(94) as usize;
+                        for c in p.iter_mut().skip(x).take(4 + rng.below(3) as usize) {
+                            *c = if world == 5 { 'x' } else { 'l' };
+                        }
+                    }
+                    rows.push(Lane::new(
+                        water_ground,
+                        0.0,
+                        0.0,
+                        &p.into_iter().collect::<String>(),
+                    ));
+                } else if wet {
                     let speed = dir * rng.range(1.5, 2.0 + speed_base * 0.4);
                     let gap = 4 + rng.below(4) as usize;
                     let p = pattern(&mut rng, floats(world), gap, 6);
@@ -184,6 +202,7 @@ pub fn make(d: u32, seed: u64) -> Made {
                 level,
                 world,
                 night,
+                fog,
                 time,
             };
         }
@@ -201,6 +220,7 @@ pub fn make(d: u32, seed: u64) -> Made {
         level,
         world: 0,
         night: false,
+        fog: false,
         time: 30.0,
     }
 }

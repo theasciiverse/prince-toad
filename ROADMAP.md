@@ -12,11 +12,14 @@ gamepad, save, demo.
 Trains at railway crossings, flies to eat, today's road, two players
 together, livelier kiss scenes, a tune per world, tighter clocks.
 
+## 0.7.0 (2026-11-14)
+
+Fog and plank crossings on the endless road; small fixes.
+
 ## Towards 1.0
 
 - **Played by people and tuned by feel:** speeds, gaps and clocks per
   crossing, the pond's sinking time, lives.
-- **More world variety:** a bridge crossing, a market day with stalls, a
-  railway crossing with a gate and a train, fog, rain that makes roads
-  slick; things that come and go, like a fly to eat for points.
+- **More world variety:** a market day with stalls, rain that makes roads
+  slick, a drawbridge that goes up and down.
 - **Endless:** a record per world.
