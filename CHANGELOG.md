@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Railway crossings: a train comes through now and then, with a bell and
+  blinking lights before it (the Desert Stretch, and on the endless road)
+- Flies land now and then; eat one for 200 points
+- Today's road: an endless road that is the same for everyone today, with
+  its own best score
+- Tighter clocks on every crossing
+
 ## 0.5.0
 
 - The whole story: a prince turned toad crosses eighteen roads, rivers,

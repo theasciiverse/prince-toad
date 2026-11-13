@@ -169,3 +169,35 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod report {
+    use super::*;
+    use crate::levels;
+    use crate::world::START_X;
+
+    /// How long the fastest way across takes, flat out and at a human pace:
+    /// `cargo test report -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn crossing_times() {
+        for (n, s) in levels::story().iter().enumerate() {
+            let lv = s.build();
+            let toad = Toad::start(&lv, START_X);
+            let budget = (if lv.pond { 60.0 } else { s.time } / DT) as u64;
+            let fast = solve(&lv, &toad, 0, budget)
+                .map_or(-1.0, |p| p.len() as f32 * HOP_TICKS as f32 * DT);
+            let calm = solve_every(&lv, &toad, 0, budget, 3 * HOP_TICKS as u64)
+                .map_or(-1.0, |p| p.len() as f32 * 3.0 * HOP_TICKS as f32 * DT);
+            println!(
+                "{:>2} {:<24} rows {:>2} time {:>4} fastest {:>5.1}s at a third of the pace {:>5.1}s",
+                n + 1,
+                s.name,
+                lv.height(),
+                s.time,
+                fast,
+                calm
+            );
+        }
+    }
+}

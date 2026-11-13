@@ -30,6 +30,9 @@ pub struct Save {
     pub best_endless: u32,
     pub finished: bool,
     pub muted: bool,
+    /// Today's road: which day, and the best score on it.
+    pub daily_day: u64,
+    pub daily_best: u32,
 }
 
 impl Save {
@@ -46,6 +49,8 @@ impl Save {
                 "best_endless" => s.best_endless = v.parse().unwrap_or(0),
                 "finished" => s.finished = v == "1",
                 "muted" => s.muted = v == "1",
+                "daily_day" => s.daily_day = v.parse().unwrap_or(0),
+                "daily_best" => s.daily_best = v.parse().unwrap_or(0),
                 _ => {}
             }
         }
@@ -54,8 +59,14 @@ impl Save {
 
     pub fn text(&self) -> String {
         format!(
-            "reached={}\nbest_story={}\nbest_endless={}\nfinished={}\nmuted={}\n",
-            self.reached, self.best_story, self.best_endless, self.finished as u8, self.muted as u8
+            "reached={}\nbest_story={}\nbest_endless={}\nfinished={}\nmuted={}\ndaily_day={}\ndaily_best={}\n",
+            self.reached,
+            self.best_story,
+            self.best_endless,
+            self.finished as u8,
+            self.muted as u8,
+            self.daily_day,
+            self.daily_best
         )
     }
 
@@ -93,6 +104,8 @@ mod tests {
             best_endless: 99,
             finished: true,
             muted: true,
+            daily_day: 20_000,
+            daily_best: 55,
         };
         assert_eq!(Save::parse(&s.text()), s);
         assert_eq!(Save::parse("junk\nreached=x\n"), Save::default());

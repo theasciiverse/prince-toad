@@ -26,6 +26,8 @@ pub enum Ground {
     Dirt,
     Road,
     Sand,
+    /// Railway track: trains come rarely and fast.
+    Rail,
     Snow,
     /// Slippery: a hop onto ice carries on one more hop the same way.
     Ice,
@@ -45,6 +47,7 @@ impl Ground {
             "dirt" => Ground::Dirt,
             "road" => Ground::Road,
             "sand" => Ground::Sand,
+            "rail" => Ground::Rail,
             "snow" => Ground::Snow,
             "ice" => Ground::Ice,
             "cobble" => Ground::Cobble,
@@ -88,6 +91,7 @@ pub enum Kind {
     Carriage,
     Fire,
     Guard,
+    Train,
     Log,
     Turtle,
     DivingTurtle,
@@ -123,6 +127,7 @@ impl Kind {
             'a' => Kind::Carriage,
             'f' => Kind::Fire,
             'w' => Kind::Guard,
+            'R' => Kind::Train,
             'l' => Kind::Log,
             'u' => Kind::Turtle,
             'U' => Kind::DivingTurtle,
@@ -148,7 +153,7 @@ impl Kind {
         use Kind::*;
         match self {
             Car | Truck | Bike | Cart | Tractor | Goose | Moto | Plow | Sled | Knight
-            | Carriage | Fire | Guard => Role::Hazard,
+            | Carriage | Fire | Guard | Train => Role::Hazard,
             Log | Turtle | DivingTurtle | Floe | CrackingFloe | Pad | Barrel | Duck
             | DivingDuck => Role::Floater,
             Hedge | Rock | Tree | Lamp | Cactus | House => Role::Blocker,
@@ -398,6 +403,25 @@ impl Level {
         (0..lane.items.len()).any(|i| {
             lane.items[i].kind.role() == Role::Blocker
                 && lane.spans(i, 0.0).iter().any(|&(a, b)| rr > a && l < b)
+        })
+    }
+
+    /// Is a train about to come through on row r?
+    pub fn train_coming(&self, r: usize, t: f32) -> bool {
+        let lane = &self.rows[r];
+        if lane.ground != Ground::Rail {
+            return false;
+        }
+        let right = lane.velocity(t) > 0.0;
+        (0..lane.items.len()).any(|i| {
+            lane.items[i].kind == Kind::Train
+                && lane.spans(i, t).iter().any(|&(a, b)| {
+                    if right {
+                        (-45.0..2.0).contains(&b)
+                    } else {
+                        (W - 2.0..W + 45.0).contains(&a)
+                    }
+                })
         })
     }
 

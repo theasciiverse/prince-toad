@@ -145,6 +145,18 @@ pub fn make(d: u32, seed: u64) -> Made {
                     let gap = 4 + rng.below(4) as usize;
                     let p = pattern(&mut rng, floats(world), gap, 6);
                     rows.push(Lane::new(water_ground, speed, 0.0, &p));
+                } else if (world == 1 || world == 4) && d >= 3 && rng.chance(0.12) {
+                    let train = format!(
+                        "{}{}",
+                        "R".repeat(20 + rng.below(12) as usize),
+                        ".".repeat(70)
+                    );
+                    rows.push(Lane::new(
+                        Ground::Rail,
+                        dir * rng.range(20.0, 26.0),
+                        0.0,
+                        &train,
+                    ));
                 } else if world == 3 && rng.chance(0.25) {
                     rows.push(Lane::new(Ground::Ice, 0.0, 0.0, ""));
                 } else {
@@ -163,7 +175,7 @@ pub fn make(d: u32, seed: u64) -> Made {
             rows.push(safe_row(&mut rng, world));
         }
         let level = Level::new(rows, false);
-        let time = 30.0 + level.height() as f32 * 2.0;
+        let time = 24.0 + level.height() as f32 * 1.2;
         let toad = Toad::start(&level, START_X);
         if let Some(plan) = solver::solve(&level, &toad, 0, (time / DT) as u64)
             && (plan.len() as f32 * 8.0 * DT) < time * 0.7

@@ -276,6 +276,11 @@ fn ground_cell(ground: Ground, world: usize, col: i32, row: i32, t: f32, below_r
                 bg: Some((50, 50, 56)),
             }
         }
+        Ground::Rail => Cell {
+            ch: if col.rem_euclid(2) == 0 { '╪' } else { '═' },
+            fg: (150, 145, 150),
+            bg: Some((74, 58, 46)),
+        },
         Ground::Sand => Cell {
             ch: if h.is_multiple_of(8) { '·' } else { ' ' },
             fg: (178, 148, 96),
@@ -340,6 +345,7 @@ fn body_color(kind: Kind, seed: u32) -> Rgb {
     match kind {
         Kind::Car => CARS[(seed >> 3) as usize % CARS.len()],
         Kind::Truck => (196, 196, 202),
+        Kind::Train => (70, 90, 120),
         Kind::Cart => (170, 72, 46),
         Kind::Tractor => (64, 150, 64),
         Kind::Moto => (40, 40, 48),
@@ -360,6 +366,7 @@ fn solid(kind: Kind) -> bool {
         kind,
         Kind::Car
             | Kind::Truck
+            | Kind::Train
             | Kind::Cart
             | Kind::Tractor
             | Kind::Moto
@@ -387,6 +394,18 @@ fn detail(
     let fwd = |n: usize| if right { len.saturating_sub(1 + n) } else { n };
     match kind {
         Kind::Car => (len >= 3 && k > 0 && k < len - 1).then_some(('▀', (170, 210, 240))),
+        Kind::Train => {
+            // an engine in front, carriages with windows behind
+            if k == front {
+                Some((if right { '▶' } else { '◀' }, (230, 70, 50)))
+            } else if k == fwd(1) || k == fwd(2) {
+                Some(('▀', (250, 230, 140)))
+            } else if (if right { len - 1 - k } else { k }) % 6 == 3 {
+                Some(('│', (30, 40, 60)))
+            } else {
+                Some(('▀', (190, 210, 230)))
+            }
+        }
         Kind::Truck => {
             let cab = [(200, 60, 50), (60, 100, 200), (60, 150, 80), (230, 140, 40)]
                 [(seed >> 4) as usize % 4];
@@ -759,6 +778,31 @@ fn field(cv: &mut Canvas, g: &Game) {
         }
         draw_items(cv, lv, r, lane, t, gm.fx0, y, left, right);
     }
+    // level-crossing lights
+    for r in 0..lv.height() {
+        if lv.train_coming(r, t) && (t * 4.0) as i32 % 2 == 0 {
+            for rr in [r as i32 - 1, r as i32 + 1] {
+                if rr >= 0 && rr < lv.height() as i32 {
+                    for col in [1, 78] {
+                        cv.put(gm.fx0 + col, gm.fy0 + rr, '●', (255, 50, 40), None);
+                    }
+                }
+            }
+        }
+    }
+    // a fly
+    if let Some((row, x, left)) = g.fly
+        && (left > 1.0 || (t * 6.0) as i32 % 2 == 0)
+    {
+        let sx = gm.fx0 + x.round() as i32;
+        let wing = if (t * 12.0) as i32 % 2 == 0 {
+            '°'
+        } else {
+            '·'
+        };
+        cv.put(sx, gm.fy0 + row as i32, wing, (40, 40, 45), None);
+        cv.put(sx + 1, gm.fy0 + row as i32, '•', (20, 20, 25), None);
+    }
     // what waits on the far bank
     if !lv.pond && g.mode == Mode::Story {
         let kiss = &KISSES[g.kiss];
@@ -1080,6 +1124,14 @@ fn hud(cv: &mut Canvas, g: &Game) {
                 "Find the princess. Hop diagonally with Q E Z C or numpad 7 9 1 3.".to_string()
             }
             Mode::Story => format!("Waiting on the far side: {}", KISSES[g.kiss].name),
+            Mode::Endless if g.daily => format!(
+                "Today's road. Best today: {}",
+                if g.save.daily_day == crate::game::today() {
+                    g.save.daily_best
+                } else {
+                    0
+                }
+            ),
             Mode::Endless => format!("Best on the endless road: {}", g.save.best_endless),
             Mode::Versus => "Player one: W A S D    Player two: arrows".to_string(),
         },

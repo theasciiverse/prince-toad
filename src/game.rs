@@ -14,6 +14,14 @@ pub const EXTRA_LIFE: u32 = 5000;
 /// Crossings to win a two-player race.
 pub const RACE_TO: u32 = 5;
 
+/// Days since 1970, in UTC.
+pub fn today() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() / 86_400)
+        .unwrap_or(0)
+}
+
 pub fn version_string() -> String {
     format!("Prince Toad {}", env!("CARGO_PKG_VERSION"))
 }
@@ -143,6 +151,13 @@ pub struct Game {
     /// Score at the start of this crossing, to go back to on a retry.
     level_score: u32,
     pub pad_names: Vec<String>,
+    /// A fly to eat: (row, x, seconds left).
+    pub fly: Option<(usize, f32, f32)>,
+    fly_clock: f32,
+    /// Rail rows whose bell has rung for the train coming now.
+    rang: Vec<bool>,
+    /// The endless road is today's, the same for everyone.
+    pub daily: bool,
 }
 
 pub enum Start {
@@ -189,6 +204,10 @@ impl Game {
                 .unwrap_or(7),
             level_score: 0,
             pad_names: Vec::new(),
+            fly: None,
+            fly_clock: 0.0,
+            rang: Vec::new(),
+            daily: false,
         };
         match start {
             Start::Title => {}
@@ -225,6 +244,7 @@ impl Game {
         }
         v.push("A new story".into());
         v.push("The endless road".into());
+        v.push("Today's road".into());
         v.push("Two players".into());
         if self.save.reached > 0 {
             v.push("Choose a crossing".into());
@@ -249,6 +269,9 @@ impl Game {
         self.lt = 0;
         self.bot = None;
         self.princess = None;
+        self.fly = None;
+        self.fly_clock = 0.0;
+        self.rang = vec![false; self.level.height()];
         if self.level.pond {
             self.place_princess(None);
         }
@@ -284,6 +307,9 @@ impl Game {
         self.lt = 0;
         self.bot = None;
         self.princess = None;
+        self.fly = None;
+        self.fly_clock = 0.0;
+        self.rang = vec![false; self.level.height()];
         self.kiss = (self.seed as usize + n * 7) % (KISSES.len() - 1);
         let xs: Vec<f32> = if self.mode == Mode::Versus {
             vec![30.0, 46.0]
@@ -302,8 +328,20 @@ impl Game {
 
     pub fn start_endless(&mut self) {
         self.mode = Mode::Endless;
+        self.daily = false;
         self.players = vec![];
         self.seed = self.seed.wrapping_add(1);
+        let made = endless::make(0, self.seed);
+        self.load_made(made, 0);
+        self.set_phase(Phase::Play);
+    }
+
+    /// Today's road: the endless road from a seed everyone shares today.
+    pub fn start_daily(&mut self) {
+        self.mode = Mode::Endless;
+        self.daily = true;
+        self.players = vec![];
+        self.seed = today() * 7_919 + 17;
         let made = endless::make(0, self.seed);
         self.load_made(made, 0);
         self.set_phase(Phase::Play);
@@ -525,6 +563,8 @@ impl Game {
                         self.players[0].score = score;
                         self.load_story(n);
                         self.set_phase(Phase::WorldCard);
+                    } else if self.daily {
+                        self.start_daily();
                     } else {
                         self.start_endless();
                     }
@@ -560,6 +600,8 @@ impl Game {
             self.start_story(0, true);
         } else if item.starts_with("The endless") {
             self.start_endless();
+        } else if item.starts_with("Today") {
+            self.start_daily();
         } else if item.starts_with("Two players") {
             self.start_versus();
         } else if item.starts_with("Choose") {
@@ -666,6 +708,16 @@ impl Game {
         if self.level.pond && self.phase == Phase::Play {
             self.princess_tick(audio);
         }
+        if self.phase == Phase::Play {
+            self.fly_tick(t, audio);
+            for r in 0..self.level.height() {
+                let coming = self.level.train_coming(r, t);
+                if coming && !self.rang[r] {
+                    audio.play(Sfx::Bell);
+                }
+                self.rang[r] = coming;
+            }
+        }
     }
 
     fn bot_tick(&mut self) {
@@ -724,10 +776,16 @@ impl Game {
                     audio.play(Sfx::GameOver);
                     if self.mode == Mode::Endless {
                         let s = p.score;
-                        if s > self.save.best_endless {
-                            self.save.best_endless = s;
-                            self.save.store();
+                        if self.daily {
+                            let day = today();
+                            if self.save.daily_day != day {
+                                self.save.daily_day = day;
+                                self.save.daily_best = 0;
+                            }
+                            self.save.daily_best = self.save.daily_best.max(s);
                         }
+                        self.save.best_endless = self.save.best_endless.max(s);
+                        self.save.store();
                     }
                     self.set_phase(Phase::GameOver);
                 }
@@ -823,6 +881,17 @@ impl Game {
                     }
                     self.save.store();
                 }
+                if self.mode != Mode::Story {
+                    let who = match (self.mode, i) {
+                        (Mode::Versus, 0) => "Player one",
+                        (Mode::Versus, _) => "Player two",
+                        _ => "He",
+                    };
+                    self.msg = Some((
+                        format!("{who} kisses {}. Still a toad.", KISSES[self.kiss].name),
+                        2.5,
+                    ));
+                }
                 if self.mode == Mode::Versus && p.crossings >= RACE_TO {
                     self.set_phase(Phase::Won(i));
                     audio.play(Sfx::Fanfare);
@@ -839,6 +908,46 @@ impl Game {
             audio.play(Sfx::Life);
             self.msg = Some(("An extra life!".into(), 2.0));
         }
+    }
+
+    /// Now and then a fly lands somewhere safe; eat it for points.
+    fn fly_tick(&mut self, t: f32, audio: &mut Audio) {
+        if let Some((row, x, left)) = &mut self.fly {
+            *left -= DT;
+            let (row, x, gone) = (*row, *x, *left <= 0.0);
+            for p in &mut self.players {
+                if p.dead.is_none() && p.toad.row == row && (p.toad.x - x).abs() < 1.5 {
+                    p.score += 200;
+                    self.fly = None;
+                    self.msg = Some(("Gulp. A fly! 200 points.".into(), 2.0));
+                    audio.play(Sfx::Gulp);
+                    log::info!("fly eaten at row {row}");
+                    return;
+                }
+            }
+            if gone {
+                self.fly = None;
+            }
+            return;
+        }
+        self.fly_clock += DT;
+        if self.fly_clock < 7.0 || self.level.pond {
+            return;
+        }
+        self.fly_clock = 0.0;
+        self.seed = self
+            .seed
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1442695040888963407);
+        let h = self.level.height();
+        let row = 1 + (self.seed >> 40) as usize % (h - 2).max(1);
+        let x = 4.0 + 2.0 * ((self.seed >> 20) % 36) as f32;
+        let lane = &self.level.rows[row];
+        if lane.moving() || lane.ground.wet() || self.level.blocked(row, x) {
+            return;
+        }
+        let _ = t;
+        self.fly = Some((row, x, 5.0));
     }
 
     fn princess_tick(&mut self, audio: &mut Audio) {

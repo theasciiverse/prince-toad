@@ -32,9 +32,11 @@ pub enum Sfx {
     Select,
     Honk,
     Life,
+    Bell,
+    Gulp,
 }
 
-const ALL_SFX: [Sfx; 17] = [
+const ALL_SFX: [Sfx; 19] = [
     Sfx::Croak1,
     Sfx::Croak2,
     Sfx::Croak3,
@@ -52,6 +54,8 @@ const ALL_SFX: [Sfx; 17] = [
     Sfx::Select,
     Sfx::Honk,
     Sfx::Life,
+    Sfx::Bell,
+    Sfx::Gulp,
 ];
 
 pub struct Audio {
@@ -308,6 +312,21 @@ fn render_sfx(s: Sfx) -> Vec<f32> {
                     * (t / 0.01).min(1.0)
                     * ((0.3 - t) / 0.05).clamp(0.0, 1.0)
                     * 0.12
+            })
+        }
+        // a level-crossing bell: two bright rings
+        Sfx::Bell => synth(0.7, |t, _| {
+            let local = t % 0.35;
+            let ring = (TAU * 1320.0 * local).sin() * 0.5
+                + (TAU * 2640.0 * local).sin() * 0.25
+                + (TAU * 3960.0 * local).sin() * 0.1;
+            ring * (-local * 9.0).exp() * 0.3
+        }),
+        Sfx::Gulp => {
+            let mut ph = 0.0f32;
+            synth(0.12, |t, _| {
+                ph += (500.0 - 2500.0 * t) / SRF;
+                (ph * TAU).sin() * (1.0 - t / 0.12) * 0.35
             })
         }
         Sfx::Life => tune(
