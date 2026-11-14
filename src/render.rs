@@ -490,7 +490,15 @@ fn detail(
         Kind::Stall => Some(if k % 2 == 0 {
             ('▀', (240, 236, 220))
         } else {
-            (['●', '♣', '◆', '●'][(seed as usize + k) % 4], [(240, 180, 40), (90, 170, 60), (200, 90, 160), (230, 110, 40)][(seed as usize + k) % 4])
+            (
+                ['●', '♣', '◆', '●'][(seed as usize + k) % 4],
+                [
+                    (240, 180, 40),
+                    (90, 170, 60),
+                    (200, 90, 160),
+                    (230, 110, 40),
+                ][(seed as usize + k) % 4],
+            )
         }),
         Kind::Floe => (k % 4 == 2).then_some(('▒', (200, 220, 238))),
         Kind::CrackingFloe => match surf {
@@ -724,6 +732,11 @@ fn field(cv: &mut Canvas, g: &Game) {
     };
     // sky and horizon above the field
     let (hi, lo) = sky(g.world, g.night);
+    let (hi, lo) = if lv.rain && !g.night {
+        (mix(hi, (120, 128, 140), 0.6), mix(lo, (150, 156, 165), 0.6))
+    } else {
+        (hi, lo)
+    };
     let sky_rows = gm.fy0 - top;
     for y in top..gm.fy0 {
         let k = if sky_rows > 1 {
@@ -937,6 +950,33 @@ fn field(cv: &mut Canvas, g: &Game) {
                     },
                     None,
                 );
+            }
+        }
+    }
+    // rain over everything, and a shine on the wet roads
+    if lv.rain {
+        for y in top..bottom {
+            for x in a.x as i32..a.right() as i32 {
+                // each drop falls one row and one column at a time, along its slant
+                let fall = (t * 14.0) as i32;
+                let h = hash(x + y, y - fall);
+                if h.is_multiple_of(23) && cv.buf[(x as u16, y as u16)].symbol() == " " {
+                    cv.put(x, y, '╱', (150, 175, 215), None);
+                }
+            }
+        }
+        for (r, lane) in lv.rows.iter().enumerate() {
+            if lane.ground != Ground::Road {
+                continue;
+            }
+            let y = gm.fy0 + r as i32;
+            for x in a.x as i32..a.right() as i32 {
+                let bg = cv.bg_at(x, y);
+                let cell = &mut cv.buf[(x as u16, y as u16)];
+                if cell.symbol() == " " && hash(x, r as i32 + 40).is_multiple_of(9) {
+                    cell.set_char('~');
+                    cell.fg = c(mix(bg, (170, 190, 220), 0.35));
+                }
             }
         }
     }

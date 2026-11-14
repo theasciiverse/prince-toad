@@ -39,6 +39,7 @@ pub struct Made {
     pub night: bool,
     /// Fog: only the lanes near the toads can be seen.
     pub fog: bool,
+    pub rain: bool,
     pub time: f32,
 }
 
@@ -117,6 +118,7 @@ pub fn make(d: u32, seed: u64) -> Made {
         let world = ((d / 3) % 6) as usize;
         let night = world == 4;
         let fog = matches!(world, 0 | 2) && d >= 4 && rng.chance(0.3);
+        let rain = matches!(world, 1 | 4) && d >= 4 && rng.chance(0.3);
         let lanes_total = (4 + d.min(10)) as usize;
         let speed_base = 2.5 + d.min(20) as f32 * 0.35;
         let road_ground = match world {
@@ -192,7 +194,8 @@ pub fn make(d: u32, seed: u64) -> Made {
             }
             rows.push(safe_row(&mut rng, world));
         }
-        let level = Level::new(rows, false);
+        let mut level = Level::new(rows, false);
+        level.rain = rain;
         let time = 24.0 + level.height() as f32 * 1.2;
         let toad = Toad::start(&level, START_X);
         if let Some(plan) = solver::solve(&level, &toad, 0, (time / DT) as u64)
@@ -203,6 +206,7 @@ pub fn make(d: u32, seed: u64) -> Made {
                 world,
                 night,
                 fog,
+                rain,
                 time,
             };
         }
@@ -221,6 +225,7 @@ pub fn make(d: u32, seed: u64) -> Made {
         world: 0,
         night: false,
         fog: false,
+        rain: false,
         time: 30.0,
     }
 }

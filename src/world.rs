@@ -361,6 +361,8 @@ pub struct Level {
     pub rows: Vec<Lane>,
     /// The pond: diagonal hops, sinking pads, nothing to cross to.
     pub pond: bool,
+    /// Rain: a hop onto a wet road carries on one more hop.
+    pub rain: bool,
     /// For lily pads: when the toad landed on each (row, item), if lately.
     pub landed: Vec<Vec<Option<f32>>>,
 }
@@ -368,7 +370,12 @@ pub struct Level {
 impl Level {
     pub fn new(rows: Vec<Lane>, pond: bool) -> Level {
         let landed = rows.iter().map(|r| vec![None; r.items.len()]).collect();
-        Level { rows, pond, landed }
+        Level {
+            rows,
+            pond,
+            rain: false,
+            landed,
+        }
     }
 
     pub fn height(&self) -> usize {
@@ -530,7 +537,10 @@ impl Toad {
                     self.cool = HOP_TICKS;
                     self.facing = d;
                     self.air = 0;
-                    if lv.rows[self.row].ground == Ground::Ice && !d.diagonal() {
+                    let ground = lv.rows[self.row].ground;
+                    if !d.diagonal()
+                        && (ground == Ground::Ice || (lv.rain && ground == Ground::Road && !slid))
+                    {
                         self.slide = Some(d);
                     }
                     step = Step::Hopped { slid };
@@ -685,6 +695,31 @@ mod tests {
             toad.tick(&level, t, None);
         }
         assert_eq!(toad.row, 1, "and slid on by itself");
+    }
+
+    #[test]
+    fn rain_slides_you_one_hop_and_no_more() {
+        let mut level = lv(&[
+            ("bank", 0.0, ""),
+            ("grass", 0.0, ""),
+            ("road", 0.0, ""),
+            ("road", 0.0, ""),
+            ("road", 0.0, ""),
+            ("grass", 0.0, ""),
+        ]);
+        let run = |level: &Level| {
+            let mut toad = Toad::start(level, START_X);
+            let mut t = DT;
+            toad.tick(level, t, Some(Dir::Up));
+            for _ in 0..HOP_TICKS * 4 {
+                t += DT;
+                toad.tick(level, t, None);
+            }
+            toad.row
+        };
+        assert_eq!(run(&level), 4, "dry: one hop");
+        level.rain = true;
+        assert_eq!(run(&level), 3, "wet: one hop and one slide, then it stops");
     }
 
     #[test]

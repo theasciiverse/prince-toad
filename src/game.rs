@@ -370,6 +370,11 @@ impl Game {
         self.fog = made.fog;
         if made.fog {
             self.msg = Some(("Fog on the road. Look sharp.".into(), 3.0));
+        } else if made.rain {
+            self.msg = Some((
+                "Rain! A hop onto a wet road slides one further.".into(),
+                3.5,
+            ));
         }
         self.time = made.time;
         self.level_no = n;
