@@ -5,6 +5,7 @@
 //! every call does nothing. Layout after tspace's.
 
 use rodio::MixerDeviceSink;
+use rodio::Source;
 use rodio::buffer::SamplesBuffer;
 use std::f32::consts::TAU;
 use std::num::NonZero;
@@ -34,9 +35,13 @@ pub enum Sfx {
     Life,
     Bell,
     Gulp,
+    /// The hope after a kiss: a rising shimmer.
+    Sparkle,
+    /// ...and it goes out.
+    Fizzle,
 }
 
-const ALL_SFX: [Sfx; 19] = [
+const ALL_SFX: [Sfx; 21] = [
     Sfx::Croak1,
     Sfx::Croak2,
     Sfx::Croak3,
@@ -56,6 +61,8 @@ const ALL_SFX: [Sfx; 19] = [
     Sfx::Life,
     Sfx::Bell,
     Sfx::Gulp,
+    Sfx::Sparkle,
+    Sfx::Fizzle,
 ];
 
 pub struct Audio {
@@ -65,6 +72,8 @@ pub struct Audio {
     /// One little tune per world, for its card.
     tunes: Vec<SamplesBuffer>,
     pub muted: bool,
+    /// Quieter sound (an option).
+    pub quiet: bool,
     last: [Option<Instant>; ALL_SFX.len()],
     croak: usize,
 }
@@ -102,6 +111,7 @@ impl Audio {
             bank,
             tunes,
             muted,
+            quiet: false,
             last: [None; ALL_SFX.len()],
             croak: 0,
         }
@@ -115,6 +125,7 @@ impl Audio {
             bank: Vec::new(),
             tunes: Vec::new(),
             muted: true,
+            quiet: false,
             last: [None; ALL_SFX.len()],
             croak: 0,
         }
@@ -135,7 +146,8 @@ impl Audio {
             return;
         }
         self.last[i] = Some(now);
-        sink.mixer().add(self.bank[i].clone());
+        let v = self.volume();
+        sink.mixer().add(self.bank[i].clone().amplify(v));
     }
 
     /// The tune of world w, on its card.
@@ -143,8 +155,9 @@ impl Audio {
         if self.muted {
             return;
         }
+        let v = self.volume();
         if let (Some(sink), Some(tune)) = (&self.sink, self.tunes.get(w)) {
-            sink.mixer().add(tune.clone());
+            sink.mixer().add(tune.clone().amplify(v));
         }
     }
 
@@ -156,6 +169,26 @@ impl Audio {
 
     pub fn toggle_mute(&mut self) {
         self.muted = !self.muted;
+    }
+
+    fn volume(&self) -> f32 {
+        if self.quiet { 0.35 } else { 1.0 }
+    }
+
+    /// The sound setting: 0 on, 1 quiet, 2 off.
+    pub fn level(&self) -> usize {
+        if self.muted {
+            2
+        } else if self.quiet {
+            1
+        } else {
+            0
+        }
+    }
+
+    pub fn set_level(&mut self, l: usize) {
+        self.muted = l == 2;
+        self.quiet = l == 1;
     }
 }
 
@@ -430,6 +463,22 @@ fn render_sfx(s: Sfx) -> Vec<f32> {
             synth(0.12, |t, _| {
                 ph += (500.0 - 2500.0 * t) / SRF;
                 (ph * TAU).sin() * (1.0 - t / 0.12) * 0.35
+            })
+        }
+        Sfx::Sparkle => {
+            // quick high notes climbing, like a wand being waved
+            let notes: Vec<(f32, f32)> = (0..10).map(|i| (79.0 + i as f32 * 2.0, 0.045)).collect();
+            tune(&notes, 0.09, tri)
+        }
+        Sfx::Fizzle => {
+            // a falling whistle that runs out of puff, then a little hiss
+            let mut ph = 0.0f32;
+            synth(0.6, |t, n| {
+                let f = 900.0 * (1.0 - t / 0.6 * 0.7);
+                ph += f / SRF;
+                let tone = (ph * TAU).sin() * (1.0 - t / 0.45).max(0.0) * 0.18;
+                let hiss = n.next() * ((t - 0.35) / 0.1).clamp(0.0, 1.0) * (1.0 - t / 0.6) * 0.1;
+                tone + hiss
             })
         }
         Sfx::Life => tune(

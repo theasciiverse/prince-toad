@@ -67,6 +67,8 @@ pub struct Save {
     pub best_endless: u32,
     pub finished: bool,
     pub muted: bool,
+    /// Sound on but quieter.
+    pub quiet: bool,
     /// Today's road: which day, and the best score on it.
     pub daily_day: u64,
     pub daily_best: u32,
@@ -95,6 +97,7 @@ impl Save {
                 "best_endless" => s.best_endless = v.parse().unwrap_or(0),
                 "finished" => s.finished = v == "1",
                 "muted" => s.muted = v == "1",
+                "quiet" => s.quiet = v == "1",
                 "daily_day" => s.daily_day = v.parse().unwrap_or(0),
                 "daily_best" => s.daily_best = v.parse().unwrap_or(0),
                 "pace" => s.pace = v.parse::<usize>().unwrap_or(0).min(PACES.len() - 1),
@@ -132,12 +135,13 @@ impl Save {
 
     pub fn text(&self) -> String {
         let mut t = format!(
-            "reached={}\nbest_story={}\nbest_endless={}\nfinished={}\nmuted={}\ndaily_day={}\ndaily_best={}\npace={}\nlives={}\nname={}\n",
+            "reached={}\nbest_story={}\nbest_endless={}\nfinished={}\nmuted={}\nquiet={}\ndaily_day={}\ndaily_best={}\npace={}\nlives={}\nname={}\n",
             self.reached,
             self.best_story,
             self.best_endless,
             self.finished as u8,
             self.muted as u8,
+            self.quiet as u8,
             self.daily_day,
             self.daily_best,
             self.pace,
@@ -235,6 +239,7 @@ mod tests {
             best_endless: 99,
             finished: true,
             muted: true,
+            quiet: true,
             daily_day: 20_000,
             daily_best: 55,
             pace: 2,

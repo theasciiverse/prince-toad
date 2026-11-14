@@ -179,6 +179,8 @@ pub struct Game {
     pub demo: bool,
     /// Sound off right now (shown in the menus).
     pub muted: bool,
+    /// Sound on but quieter.
+    pub quiet: bool,
     bot: Option<Demo>,
     pub exit: bool,
     seed: u64,
@@ -245,6 +247,7 @@ impl Game {
             save,
             demo: false,
             muted: false,
+            quiet: false,
             bot: None,
             exit: false,
             seed: std::time::SystemTime::now()
@@ -665,7 +668,9 @@ impl Game {
             },
             Phase::Crossed => {}
             Phase::Kiss => {
-                if matches!(e, Ev::Confirm | Ev::Hop(..)) && self.phase_t > 2.0 {
+                if matches!(e, Ev::Confirm | Ev::Hop(..))
+                    && self.phase_t > crate::render::KISS_ENTER
+                {
                     self.after_kiss();
                 }
             }
@@ -912,9 +917,11 @@ impl Game {
                 self.persist();
             }
             2 => {
-                audio.toggle_mute();
+                audio.set_level((audio.level() as i32 + by).rem_euclid(3) as usize);
                 self.save.muted = audio.muted;
+                self.save.quiet = audio.quiet;
                 self.muted = audio.muted;
+                self.quiet = audio.quiet;
                 self.persist();
             }
             3 if e == Ev::Confirm => {
@@ -1029,10 +1036,21 @@ impl Game {
                 }
             }
             Phase::Kiss => {
-                if (self.phase_t - 1.2).abs() < DT / 2.0 + 1e-4 {
+                let at = |s: f32| (self.phase_t - s).abs() < DT / 2.0 + 1e-4;
+                if at(1.2) {
                     audio.play(Sfx::Kiss);
                 }
-                if self.demo && self.phase_t > 6.0 {
+                // the cactus has no moment of hope, only ow
+                if self.kiss != 4 {
+                    if at(crate::render::KISS_HOPE) {
+                        audio.play(Sfx::Sparkle);
+                    }
+                    if at(crate::render::KISS_FIZZLE) {
+                        audio.play(Sfx::Fizzle);
+                    }
+                }
+                let done = crate::render::kiss_text_done(KISSES[self.kiss].text);
+                if self.demo && self.phase_t > done + 2.0 {
                     self.after_kiss();
                 }
             }

@@ -136,6 +136,7 @@ fn main() -> ExitCode {
     let demo = matches!(args.start, Start::Demo(_));
     // open audio before the alternate screen, so any ALSA chatter lands above it
     let mut audio = audio::Audio::new(args.mute);
+    audio.quiet = save.quiet;
     if save.muted && !args.mute {
         log::info!("sound is off in the saved settings");
         audio.muted = true;
@@ -162,6 +163,7 @@ fn main() -> ExitCode {
     let mut game = Game::new(args.start, save);
     game.demo = demo;
     game.muted = audio.muted;
+    game.quiet = audio.quiet;
     let result = run(&mut terminal, &mut game, &mut input, &mut audio);
     if kitty {
         let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);

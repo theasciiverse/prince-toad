@@ -692,6 +692,28 @@ pub const KISSES: [Kiss; 19] = [
 ];
 
 /// The prince as a toad, for the scenes.
+/// The last word on each kiss, after its story: one per story kiss.
+pub const VERDICTS: [&str; 18] = [
+    "Still a toad.",
+    "Still a toad. The gnome is still a gnome.",
+    "He sparkles. It is only cow spit.",
+    "Still a toad. Now he wants pancakes.",
+    "Still a toad. A slightly prickly one.",
+    "Still a toad. The cone will keep his secret.",
+    "Still a toad. Every fish in the river knows.",
+    "Still a toad. Squeak.",
+    "Still a toad. Still in one piece, which is something.",
+    "Still a toad. A colder one.",
+    "Still a toad. Thawed, at least.",
+    "Still a toad. Warm feet, though.",
+    "Still a toad. Lit up, for a second.",
+    "Still a toad. A wet one.",
+    "Still a toad. The crows are still laughing.",
+    "Still a toad. The pigeons are not impressed.",
+    "Still a toad. Her ears will ring until Tuesday.",
+    "Still a toad. Not toast, though!",
+];
+
 pub const TOAD_ART: &[&str] = &[r"  (o) (o)", r" (  ___  )", r"  \_   _/", r"  /_\ /_\"];
 
 pub const PROLOGUE: [&str; 3] = [
@@ -774,6 +796,7 @@ mod tests {
         all.extend(PROLOGUE);
         all.extend(FINALE);
         all.extend(GIGGLES);
+        all.extend(VERDICTS);
         all.extend(WORLDS.iter().flat_map(|w| [w.name, w.tagline]));
         for s in all {
             assert!(!s.contains('\u{2013}') && !s.contains('\u{2014}'), "{s}");

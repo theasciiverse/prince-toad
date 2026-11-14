@@ -1504,7 +1504,7 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
     let t = g.phase_t;
     let inner = cv.panel(
         70,
-        18,
+        19,
         &format!(
             "{} kisses {}",
             if g.level_no == 0 { "The prince" } else { "He" },
@@ -1644,16 +1644,76 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
     if t > 1.2 && t < 2.2 {
         cv.text(end + 2, ground - 5, "smack!", GOLD, None);
     }
-    if t > 1.7 {
-        let shown = (((t - 1.7) * 50.0) as usize).min(kiss.text.len());
+    // a moment of hope: sparkles gather round him... and fizzle out
+    let toad_mid = (tx + tw / 2 + shake, ground - 2);
+    if (KISS_HOPE..KISS_FIZZLE + 0.8).contains(&t) && g.kiss != 4 {
+        let rising = t < KISS_FIZZLE;
+        let k = if rising {
+            (t - KISS_HOPE) / (KISS_FIZZLE - KISS_HOPE)
+        } else {
+            (t - KISS_FIZZLE) / 0.8
+        };
+        for j in 0..10 {
+            let a = j as f32 / 10.0 * std::f32::consts::TAU + t * if rising { 3.0 } else { 0.5 };
+            let r = if rising { 10.0 - 3.0 * k } else { 7.0 };
+            let x = toad_mid.0 + (a.cos() * r) as i32;
+            let mut y = toad_mid.1 + (a.sin() * r * 0.45) as i32;
+            if !rising {
+                // they drop, grey, and go out one by one
+                y += (k * 3.0) as i32;
+                if hash(j, 4) as f32 / u32::MAX as f32 > 1.0 - k {
+                    continue;
+                }
+            }
+            let (ch, fg) = if rising {
+                (
+                    ['✦', '*', '·'][(j as usize + (t * 10.0) as usize) % 3],
+                    GOLD,
+                )
+            } else {
+                ('·', (120, 120, 110))
+            };
+            if y < ground + 1 && y > inner.y as i32 {
+                cv.put(x, y, ch, fg, None);
+            }
+        }
+        if !rising && k < 0.8 {
+            cv.text(
+                toad_mid.0 + 4,
+                toad_mid.1 - 3,
+                "fzzt",
+                (150, 150, 140),
+                None,
+            );
+        }
+    }
+    let done = kiss_text_done(kiss.text);
+    if t > KISS_TEXT {
+        let shown = (((t - KISS_TEXT) * KISS_CPS) as usize).min(kiss.text.len());
         let partial: String = kiss.text.chars().take(shown).collect();
         let mut y = ground + 3;
         for line in wrap(&partial, inner.width as usize - 6) {
             cv.centre(y, &line, TEXT, None);
             y += 1;
         }
+        if t > done + 0.5
+            && let Some(v) = levels::VERDICTS.get(g.kiss)
+        {
+            cv.centre(y + 1, v, GOLD, None);
+        }
     }
-    if t > 2.0 && !g.demo {
+    // the tally so far
+    if g.mode == Mode::Story {
+        let tally = format!("Kisses: {}   Princes: 0", g.level_no + 1);
+        cv.text(
+            inner.x as i32,
+            inner.y as i32,
+            &tally,
+            (110, 130, 110),
+            None,
+        );
+    }
+    if t > KISS_ENTER && !g.demo {
         let s = if g.level_no + 1 == POND {
             "Enter: on towards the castle garden"
         } else {
@@ -1710,7 +1770,16 @@ fn options(cv: &mut Canvas, g: &Game) {
             },
         ),
         (
-            format!("Sound         < {} >", if g.muted { "off" } else { "on" }),
+            format!(
+                "Sound         < {} >",
+                if g.muted {
+                    "off"
+                } else if g.quiet {
+                    "quiet"
+                } else {
+                    "on"
+                }
+            ),
             "Also M or F8, any time.",
         ),
         ("Keys".to_string(), "Choose your own keys for the hops."),
@@ -1856,6 +1925,19 @@ fn enter_name(cv: &mut Canvas, g: &Game) {
     cv.centre(y + 6, "Type, then Enter", (90, 110, 95), None);
 }
 
+/// Kiss scene timing, in seconds: the hope, the fizzle, the story.
+pub const KISS_HOPE: f32 = 1.35;
+pub const KISS_FIZZLE: f32 = 2.0;
+pub const KISS_TEXT: f32 = 2.3;
+/// Enter goes on from here.
+pub const KISS_ENTER: f32 = 2.4;
+const KISS_CPS: f32 = 45.0;
+
+/// When the story of a kiss has finished typing.
+pub fn kiss_text_done(text: &str) -> f32 {
+    KISS_TEXT + text.chars().count() as f32 / KISS_CPS
+}
+
 fn game_over(cv: &mut Canvas, g: &Game) {
     cv.dim(0.4);
     let inner = cv.panel(56, 9, "Game over");
@@ -1936,9 +2018,11 @@ fn pause(cv: &mut Canvas, g: &Game) {
 
 fn help(cv: &mut Canvas, g: &Game) {
     cv.dim(0.5);
-    let inner = cv.panel(64, 20, "Controls");
+    let inner = cv.panel(64, 21, "Controls");
+    let mine: Vec<String> = (0..4).map(|i| g.key_for(i).to_uppercase()).collect();
+    let hop = format!("{}, or the arrows", mine.join(" "));
     let lines = [
-        ("Hop", "W A S D, or the arrows"),
+        ("Hop", hop.as_str()),
         (
             "Hop diagonally",
             "Q E Z C or numpad 7 9 1 3 (the pond only)",
@@ -1947,6 +2031,7 @@ fn help(cv: &mut Canvas, g: &Game) {
         ("Sound", "M or F8"),
         ("This help", "H or F1"),
         ("Two players", "one: W A S D, two: arrows"),
+        ("Own keys", "Options on the title, then Keys"),
         ("Gamepad", "d-pad or stick hops, A on, Start pause"),
         ("", ""),
         ("Roads", "do not touch anything that moves"),
@@ -2023,6 +2108,22 @@ mod tests {
         let g = Game::new(Start::Title, Save::default());
         assert!(screen(&g, 100, 30).contains("A new story"));
         assert!(screen(&g, 60, 20).contains("needs 80x24"));
+    }
+
+    #[test]
+    fn every_kiss_scene_fits_its_panel() {
+        for k in 0..levels::VERDICTS.len() {
+            let mut g = Game::new(Start::Story(k), Save::default());
+            g.phase = Phase::Kiss;
+            g.phase_t = kiss_text_done(KISSES[k].text) + 1.0;
+            for (w, h) in [(100, 30), (80, 24)] {
+                let s = screen(&g, w, h);
+                assert!(s.contains(levels::VERDICTS[k]), "kiss {k} at {w}x{h}:\n{s}");
+                assert!(s.contains("Enter: on"), "kiss {k} at {w}x{h}:\n{s}");
+                let last = KISSES[k].text.split(' ').next_back().unwrap();
+                assert!(s.contains(last), "kiss {k} text cut at {w}x{h}");
+            }
+        }
     }
 
     #[test]
