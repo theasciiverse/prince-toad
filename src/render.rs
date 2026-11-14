@@ -222,14 +222,7 @@ pub fn draw(f: &mut Frame, g: &Game) {
             TOAD_ART,
             i + 1 == levels::PROLOGUE.len(),
         ),
-        Phase::Finale(i) => page(
-            &mut cv,
-            g,
-            "Happily ever after",
-            levels::FINALE[i],
-            FINALE_ART,
-            i + 1 == levels::FINALE.len(),
-        ),
+        Phase::Finale(i) => finale(&mut cv, g, i),
         _ => {
             field(&mut cv, g);
             hud(&mut cv, g);
@@ -1527,14 +1520,6 @@ fn choose(cv: &mut Canvas, g: &Game) {
     );
 }
 
-const FINALE_ART: &[&str] = &[
-    r"              w",
-    r"  (o) (o)  ♥  (o) (o)",
-    r" (  ___  )   (  ___  )",
-    r"  \_   _/     \_   _/",
-    r"  /_\ /_\     /_\ /_\",
-];
-
 fn page(cv: &mut Canvas, g: &Game, title: &str, text: &str, art: &[&str], last: bool) {
     let inner = cv.panel(66, 18, title);
     let mut y = inner.y as i32 + 1;
@@ -1567,6 +1552,151 @@ fn page(cv: &mut Canvas, g: &Game, title: &str, text: &str, art: &[&str], last: 
             } else {
                 "Enter: go on"
             },
+            DIM,
+            None,
+        );
+    }
+}
+
+/// When the text of finale page i starts.
+pub fn finale_text_at(i: usize) -> f32 {
+    if i == 0 { KISS_TEXT } else { 0.6 }
+}
+
+/// The ending, in three pages: the kiss (and its fizzle), half a crown each,
+/// and happily ever after.
+fn finale(cv: &mut Canvas, g: &Game, i: usize) {
+    let t = g.phase_t;
+    let inner = cv.panel(66, 18, "Happily ever after");
+    let mid = inner.x as i32 + inner.width as i32 / 2;
+    let ground = inner.y as i32 + 7;
+    let tw = 11;
+    // the two toads meet in the middle (page 0), then stand together
+    let k = if i == 0 { (t / 1.2).min(1.0) } else { 1.0 };
+    let hx = (inner.x as i32 + 1) + ((mid - tw - (inner.x as i32 + 1)) as f32 * k) as i32;
+    let sx = (inner.right() as i32 - tw - 1)
+        - ((inner.right() as i32 - tw - 1 - mid - 1) as f32 * k) as i32;
+    let bob = |x: f32| {
+        if k < 1.0 {
+            ((x * 6.0).sin().abs() * 1.5) as i32
+        } else {
+            0
+        }
+    };
+    for (n, line) in TOAD_ART.iter().enumerate() {
+        let y = ground - TOAD_ART.len() as i32 + 1 + n as i32;
+        for (j, ch) in line.chars().enumerate() {
+            if ch != ' ' {
+                cv.put(hx + j as i32, y - bob(t), ch, TOAD1, None);
+                cv.put(sx + j as i32, y - bob(t + 0.3), ch, PRINCESS, None);
+            }
+        }
+    }
+    for x in inner.x as i32..inner.right() as i32 {
+        cv.put(x, ground + 1, '▔', (90, 130, 80), None);
+    }
+    // her crown, and later half of it on him
+    let crown_her = (sx + 5, ground - 4 - bob(t + 0.3));
+    let crown_him = (hx + 5, ground - 4);
+    match i {
+        0 => cv.put(crown_her.0, crown_her.1, 'w', GOLD, None),
+        1 => {
+            let s = ((t - 1.2) / 0.8).clamp(0.0, 1.0);
+            cv.put(
+                crown_her.0,
+                crown_her.1,
+                if s > 0.0 { 'v' } else { 'w' },
+                GOLD,
+                None,
+            );
+            if s > 0.0 {
+                let x = crown_her.0 + ((crown_him.0 - crown_her.0) as f32 * s) as i32;
+                let y = crown_him.1 - ((s * std::f32::consts::PI).sin() * 2.0) as i32;
+                cv.put(x, y, 'v', GOLD, None);
+            }
+        }
+        _ => {
+            cv.put(crown_her.0, crown_her.1, 'v', GOLD, None);
+            cv.put(crown_him.0, crown_him.1, 'v', GOLD, None);
+        }
+    }
+    // the kiss: smack, hope, fizzle, and it does not matter at all
+    if i == 0 && t > 1.2 {
+        if t < 2.2 {
+            cv.text(mid - 3, ground - 6, "smack!", GOLD, None);
+        }
+        if (KISS_HOPE..KISS_FIZZLE + 0.8).contains(&t) {
+            let rising = t < KISS_FIZZLE;
+            let s = if rising {
+                (t - KISS_HOPE) / (KISS_FIZZLE - KISS_HOPE)
+            } else {
+                (t - KISS_FIZZLE) / 0.8
+            };
+            for j in 0..14 {
+                let a =
+                    j as f32 / 14.0 * std::f32::consts::TAU + t * if rising { 3.0 } else { 0.5 };
+                let r = if rising { 16.0 - 3.0 * s } else { 13.0 };
+                let x = mid + (a.cos() * r) as i32;
+                let mut y = ground - 2 + (a.sin() * r * 0.3) as i32;
+                if !rising {
+                    y += (s * 3.0) as i32;
+                    if hash(j, 4) as f32 / u32::MAX as f32 > 1.0 - s {
+                        continue;
+                    }
+                }
+                let (ch, fg) = if rising {
+                    (
+                        ['✦', '*', '·'][(j as usize + (t * 10.0) as usize) % 3],
+                        GOLD,
+                    )
+                } else {
+                    ('·', (120, 120, 110))
+                };
+                if y <= ground && y > inner.y as i32 {
+                    cv.put(x, y, ch, fg, None);
+                }
+            }
+        }
+    }
+    // hearts, more and more of them
+    let hearts = match i {
+        0 if t > 2.6 => 3,
+        0 => 0,
+        1 => 5,
+        _ => 12,
+    };
+    for j in 0..hearts {
+        let rise = ((t * 1.5 + hash(j, 11) as f32 / u32::MAX as f32 * 6.0) % 6.0) as i32;
+        let x = mid - 8 + (hash(j, 12) % 17) as i32;
+        let y = ground - 4 - rise;
+        if y > inner.y as i32 {
+            cv.put(x, y, '♥', (240, 100, 130), None);
+        }
+    }
+    let text = levels::FINALE[i];
+    let start = finale_text_at(i);
+    let mut y = ground + 3;
+    if t > start {
+        let shown = (((t - start) * KISS_CPS) as usize).min(text.len());
+        let partial: String = text.chars().take(shown).collect();
+        for line in wrap(&partial, inner.width as usize - 6) {
+            cv.centre(y, &line, TEXT, None);
+            y += 1;
+        }
+    }
+    if i + 1 == levels::FINALE.len() && t > start + text.len() as f32 / KISS_CPS + 0.6 {
+        cv.centre(y + 1, "Kisses: 19   Princes: 1", GOLD, None);
+    }
+    if t > start + 0.4 {
+        let s = if i + 1 == levels::FINALE.len() {
+            "Enter: the end"
+        } else {
+            "Enter: go on"
+        };
+        cv.text(
+            inner.right() as i32 - s.len() as i32 - 1,
+            inner.bottom() as i32 - 1,
+            s,
             DIM,
             None,
         );
@@ -2258,6 +2388,25 @@ mod tests {
                 assert!(s.contains("Enter: on"), "kiss {k} at {w}x{h}:\n{s}");
                 let last = KISSES[k].text.split(' ').next_back().unwrap();
                 assert!(s.contains(last), "kiss {k} text cut at {w}x{h}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_finale_ends_with_a_prince() {
+        let mut g = Game::new(Start::Story(POND), Save::default());
+        for i in 0..levels::FINALE.len() {
+            g.phase = Phase::Finale(i);
+            g.phase_t = 20.0;
+            for (w, h) in [(100, 30), (80, 24)] {
+                let s = screen(&g, w, h);
+                let last = levels::FINALE[i].split(' ').next_back().unwrap();
+                assert!(s.contains(last), "finale {i} at {w}x{h}:\n{s}");
+                assert_eq!(
+                    s.contains("Princes: 1"),
+                    i + 1 == levels::FINALE.len(),
+                    "finale {i}"
+                );
             }
         }
     }

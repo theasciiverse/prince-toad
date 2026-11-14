@@ -701,7 +701,9 @@ impl Game {
                 }
             }
             Phase::Finale(i) => {
-                if matches!(e, Ev::Confirm | Ev::Hop(..)) && self.phase_t > 1.0 {
+                if matches!(e, Ev::Confirm | Ev::Hop(..))
+                    && self.phase_t > crate::render::finale_text_at(i) + 0.4
+                {
                     if i + 1 < levels::FINALE.len() {
                         self.set_phase(Phase::Finale(i + 1));
                     } else {
@@ -1059,7 +1061,18 @@ impl Game {
                     self.after_kiss();
                 }
             }
-            Phase::Finale(0) if (self.phase_t - DT).abs() < 1e-4 => audio.play(Sfx::Fanfare),
+            Phase::Finale(i) => {
+                let at = |s: f32| (self.phase_t - s).abs() < DT / 2.0 + 1e-4;
+                match i {
+                    0 if at(DT) => audio.play(Sfx::Fanfare),
+                    0 if at(1.2) => audio.play(Sfx::Kiss),
+                    0 if at(crate::render::KISS_HOPE) => audio.play(Sfx::Sparkle),
+                    0 if at(crate::render::KISS_FIZZLE) => audio.play(Sfx::Fizzle),
+                    1 if at(1.2) => audio.play(Sfx::Giggle),
+                    2 if at(DT) => audio.play(Sfx::Life),
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
