@@ -425,6 +425,20 @@ impl Level {
         })
     }
 
+    /// What on row r runs the toad at x over, if anything.
+    pub fn hazard_kind(&self, r: usize, x: f32, t: f32) -> Option<Kind> {
+        let (l, rr) = (x + 0.5, x + 1.5);
+        let lane = &self.rows[r];
+        lane.items
+            .iter()
+            .enumerate()
+            .find(|(i, it)| {
+                it.kind.role() == Role::Hazard
+                    && lane.spans(*i, t).iter().any(|&(a, b)| rr > a && l < b)
+            })
+            .map(|(_, it)| it.kind)
+    }
+
     /// Is the tile at x on row r taken by something solid?
     pub fn blocked(&self, r: usize, x: f32) -> bool {
         let (l, rr) = (x + 0.3, x + 1.7);

@@ -1232,6 +1232,9 @@ impl Game {
             if p.time_left <= 0.0 {
                 p.dead = Some((Death::TimeUp, 0.0));
                 audio.play(Sfx::Splat);
+                if !two {
+                    self.msg = Some(("Too slow. He sits down for a rest.".into(), 3.0));
+                }
                 log::info!("player {i} out of time");
                 return;
             }
@@ -1279,8 +1282,21 @@ impl Game {
                     Death::Drowned | Death::Swept => Sfx::Splash,
                     Death::Splash => Sfx::Plop,
                 });
-                if cause == Death::Splash {
-                    self.flash("Splash! Back to the bank.");
+                let n = self.lt as u32 / 7;
+                let line = match cause {
+                    Death::Splash => "Splash! Back to the bank.",
+                    Death::Drowned => {
+                        ["Toads can swim, he says. Not in this.", "Glug."][n as usize % 2]
+                    }
+                    Death::Swept => "Carried off, all the way downstream.",
+                    Death::TimeUp => "Too slow. He sits down for a rest.",
+                    Death::Squashed => self
+                        .level
+                        .hazard_kind(p.toad.row, p.toad.x, t)
+                        .map_or("Squashed.", |k| levels::squashed_by(k, n)),
+                };
+                if !two {
+                    self.flash(line);
                 }
             }
             Step::Crossed => {
