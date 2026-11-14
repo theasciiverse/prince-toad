@@ -204,7 +204,7 @@ fn run(
         }
         game.handle(input, audio);
         let now = Instant::now();
-        acc += now.duration_since(last).as_secs_f32().min(0.1);
+        acc += now.duration_since(last).as_secs_f32().min(0.1) * game.pace();
         last = now;
         while acc >= DT {
             acc -= DT;

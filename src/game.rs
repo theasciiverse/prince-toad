@@ -3,9 +3,12 @@
 
 use crate::audio::{Audio, Sfx};
 use crate::endless;
+use crate::input::{ACTIONS, DEFAULT_KEYS, key_name, reserved};
 use crate::input::{Ev, Input};
 use crate::levels::{self, GIGGLES, KISSES, POND};
-use crate::save::Save;
+use crate::save::{
+    BOARD_ENDLESS, BOARD_STORY, BOARD_TODAY, Entry, LIVES_OPTIONS, NAME_LEN, PACES, Save,
+};
 use crate::solver;
 use crate::world::{DT, Death, Dir, HOP_TICKS, Level, Role, START_X, Step, Surface, Toad, W};
 
@@ -13,6 +16,8 @@ pub const LIVES: u32 = 5;
 pub const EXTRA_LIFE: u32 = 5000;
 /// Crossings to win a two-player race.
 pub const RACE_TO: u32 = 5;
+/// Go on, controls, sound, pace, title.
+pub const PAUSE_ITEMS: usize = 5;
 
 /// Days since 1970, in UTC.
 pub fn today() -> u64 {
@@ -54,7 +59,24 @@ pub enum Phase {
     Finale(usize),
     /// A two-player race is won.
     Won(usize),
+    Options,
+    /// Choosing keys for the hops.
+    Keys,
+    /// A high-score table.
+    Scores(usize),
+    /// Typing a name for the table.
+    EnterName,
 }
+
+/// Where to go after a high-score table.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Next {
+    Title,
+    GameOver,
+}
+
+/// The items on the options screen.
+pub const OPTION_ITEMS: usize = 5;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Overlay {
@@ -170,6 +192,19 @@ pub struct Game {
     rang: Vec<bool>,
     /// The endless road is today's, the same for everyone.
     pub daily: bool,
+    pub opt_sel: usize,
+    pub keys_sel: usize,
+    /// Waiting for a key for this action.
+    pub key_wait: bool,
+    /// The name being typed, and the entry it is for.
+    pub name_buf: String,
+    pending: Option<(usize, Entry)>,
+    /// The table and line to light up.
+    pub highlight: Option<(usize, usize)>,
+    pub after_scores: Next,
+    /// This game, for its one line in a table.
+    run: u64,
+    binds_changed: bool,
 }
 
 pub enum Start {
@@ -222,6 +257,15 @@ impl Game {
             fly_clock: 0.0,
             rang: Vec::new(),
             daily: false,
+            opt_sel: 0,
+            keys_sel: 0,
+            key_wait: false,
+            name_buf: String::new(),
+            pending: None,
+            highlight: None,
+            after_scores: Next::Title,
+            run: 0,
+            binds_changed: true,
         };
         match start {
             Start::Title => {}
@@ -265,7 +309,8 @@ impl Game {
         if self.save.reached > 0 {
             v.push("Choose a crossing".into());
         }
-        v.push(format!("Sound: {}", if self.muted { "off" } else { "on" }));
+        v.push("High scores".into());
+        v.push("Options".into());
         v.push("Quit".into());
         v
     }
@@ -292,7 +337,7 @@ impl Game {
         if self.level.pond {
             self.place_princess(None);
         }
-        let lives = self.players.first().map_or(LIVES, |p| p.lives);
+        let lives = self.players.first().map_or(self.start_lives(), |p| p.lives);
         let score = self.players.first().map_or(0, |p| p.score);
         let next = self.players.first().map_or(EXTRA_LIFE, |p| p.next_life);
         let mut p = Player::new(&self.level, START_X, self.time);
@@ -304,6 +349,7 @@ impl Game {
     }
 
     pub fn start_story(&mut self, n: usize, fresh: bool) {
+        self.new_run();
         self.mode = Mode::Story;
         self.players = vec![];
         self.load_story(n);
@@ -342,12 +388,15 @@ impl Game {
                 p.start_x = *x;
                 p.respawn(&self.level, made.time);
             } else {
-                self.players.push(Player::new(&self.level, *x, made.time));
+                let mut p = Player::new(&self.level, *x, made.time);
+                p.lives = self.start_lives();
+                self.players.push(p);
             }
         }
     }
 
     pub fn start_endless(&mut self) {
+        self.new_run();
         self.mode = Mode::Endless;
         self.daily = false;
         self.players = vec![];
@@ -359,6 +408,7 @@ impl Game {
 
     /// Today's road: the endless road from a seed everyone shares today.
     pub fn start_daily(&mut self) {
+        self.new_run();
         self.mode = Mode::Endless;
         self.daily = true;
         self.players = vec![];
@@ -374,6 +424,7 @@ impl Game {
     }
 
     pub fn start_together(&mut self) {
+        self.new_run();
         self.mode = Mode::Together;
         self.daily = false;
         self.players = vec![];
@@ -384,6 +435,7 @@ impl Game {
     }
 
     pub fn start_versus(&mut self) {
+        self.new_run();
         self.mode = Mode::Versus;
         self.players = vec![];
         self.seed = self.seed.wrapping_add(1);
@@ -446,6 +498,11 @@ impl Game {
 
     pub fn handle(&mut self, input: &mut Input, audio: &mut Audio) {
         input.diagonals = self.phase == Phase::Play && self.level.pond;
+        input.raw = self.phase == Phase::EnterName || (self.phase == Phase::Keys && self.key_wait);
+        if self.binds_changed {
+            self.binds_changed = false;
+            input.set_binds(&self.save.keys);
+        }
         let events = std::mem::take(&mut input.events);
         if !events.is_empty() {
             self.pad_names = input.pad_names.clone();
@@ -488,9 +545,16 @@ impl Game {
                         None
                     }
                 }
-                (Overlay::Pause, Ev::Hop(_, Dir::Up)) => self.pause_sel = (self.pause_sel + 3) % 4,
+                (Overlay::Pause, Ev::Hop(_, Dir::Up)) => {
+                    self.pause_sel = (self.pause_sel + PAUSE_ITEMS - 1) % PAUSE_ITEMS
+                }
                 (Overlay::Pause, Ev::Hop(_, Dir::Down)) => {
-                    self.pause_sel = (self.pause_sel + 1) % 4
+                    self.pause_sel = (self.pause_sel + 1) % PAUSE_ITEMS
+                }
+                (Overlay::Pause, Ev::Hop(_, d @ (Dir::Left | Dir::Right)))
+                    if self.pause_sel == 3 =>
+                {
+                    self.cycle_pace(if d == Dir::Left { -1 } else { 1 });
                 }
                 (Overlay::Pause, Ev::Pause | Ev::Back) => self.overlay = None,
                 (Overlay::Pause, Ev::Help) => self.overlay = Some(Overlay::Help),
@@ -503,20 +567,40 @@ impl Game {
                         self.muted = audio.muted;
                         self.persist();
                     }
+                    3 => self.cycle_pace(1),
                     _ => {
                         self.overlay = None;
+                        let playing = self.phase == Phase::Play;
                         self.set_phase(Phase::Title);
+                        if playing {
+                            self.submit(Next::Title);
+                        }
                     }
                 },
                 _ => {}
             }
             return;
         }
-        if e == Ev::Help {
+        if e == Ev::Help && !matches!(self.phase, Phase::EnterName | Phase::Keys) {
             self.overlay = Some(Overlay::Help);
             return;
         }
         match self.phase {
+            Phase::Options => self.options_event(e, audio),
+            Phase::Keys => self.keys_event(e),
+            Phase::EnterName => self.name_event(e),
+            Phase::Scores(b) => match e {
+                Ev::Hop(_, Dir::Left) => self.set_phase(Phase::Scores((b + 2) % 3)),
+                Ev::Hop(_, Dir::Right) => self.set_phase(Phase::Scores((b + 1) % 3)),
+                Ev::Confirm | Ev::Pause | Ev::Back if self.phase_t > 0.3 => {
+                    self.highlight = None;
+                    match self.after_scores {
+                        Next::Title => self.set_phase(Phase::Title),
+                        Next::GameOver => self.set_phase(Phase::GameOver),
+                    }
+                }
+                _ => {}
+            },
             Phase::Title => {
                 let items = self.title_items();
                 match e {
@@ -591,7 +675,7 @@ impl Game {
                     let score = self.level_score / 2;
                     let n = self.level_no;
                     if self.mode == Mode::Story {
-                        self.players[0].lives = LIVES;
+                        self.players[0].lives = self.start_lives();
                         self.players[0].score = score;
                         self.load_story(n);
                         self.set_phase(Phase::WorldCard);
@@ -612,6 +696,7 @@ impl Game {
                         self.set_phase(Phase::Finale(i + 1));
                     } else {
                         self.set_phase(Phase::Title);
+                        self.submit(Next::Title);
                     }
                 }
             }
@@ -643,13 +728,267 @@ impl Game {
         } else if item.starts_with("Choose") {
             self.choose = self.save.reached.min(POND);
             self.set_phase(Phase::Choose);
-        } else if item.starts_with("Sound") {
-            audio.toggle_mute();
-            self.save.muted = audio.muted;
-            self.muted = audio.muted;
-            self.persist();
+        } else if item.starts_with("High") {
+            self.highlight = None;
+            self.after_scores = Next::Title;
+            self.set_phase(Phase::Scores(BOARD_STORY));
+        } else if item.starts_with("Options") {
+            self.opt_sel = 0;
+            self.set_phase(Phase::Options);
         } else {
             self.exit = true;
+        }
+    }
+
+    fn new_run(&mut self) {
+        self.seed = self
+            .seed
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        self.run = (self.seed >> 1).max(1);
+    }
+
+    /// Lives a game starts with.
+    pub fn start_lives(&self) -> u32 {
+        if self.save.lives == 1 { 9 } else { LIVES }
+    }
+
+    /// Lives never run out (an option).
+    pub fn endless_lives(&self) -> bool {
+        self.save.lives == LIVES_OPTIONS.len() - 1 && self.mode != Mode::Versus
+    }
+
+    /// How fast the world runs now: slower in play when chosen.
+    pub fn pace(&self) -> f32 {
+        if self.demo || !matches!(self.phase, Phase::Play | Phase::Crossed) {
+            1.0
+        } else {
+            PACES[self.save.pace.min(PACES.len() - 1)].1
+        }
+    }
+
+    fn cycle_pace(&mut self, by: i32) {
+        let n = PACES.len() as i32;
+        self.save.pace = (self.save.pace as i32 + by).rem_euclid(n) as usize;
+        self.persist();
+        log::info!("pace {}", PACES[self.save.pace].0);
+    }
+
+    /// The settings a score was made with, for its line in the table.
+    fn tag(&self) -> String {
+        let mut v = Vec::new();
+        if self.save.pace > 0 {
+            v.push(PACES[self.save.pace].0.to_lowercase());
+        }
+        match self.save.lives {
+            0 => {}
+            1 => v.push("9 lives".into()),
+            _ => v.push("no game over".into()),
+        }
+        v.join(", ")
+    }
+
+    /// The game is over or left: offer its score to the tables. `next` is
+    /// where to go after, if a name is wanted; otherwise nothing changes.
+    fn submit(&mut self, next: Next) {
+        if self.demo || self.two() {
+            return;
+        }
+        let board = match self.mode {
+            Mode::Story => BOARD_STORY,
+            _ if self.daily => BOARD_TODAY,
+            _ => BOARD_ENDLESS,
+        };
+        if board == BOARD_TODAY {
+            let day = today();
+            if self.save.daily_day != day {
+                self.save.daily_day = day;
+                self.save.daily_best = 0;
+                self.save.boards[BOARD_TODAY].clear();
+            }
+        }
+        let Some(p) = self.players.first() else {
+            return;
+        };
+        let score = p.score;
+        let reached = if self.mode == Mode::Story {
+            if self.level.pond {
+                if self.phase == Phase::Title && self.save.finished {
+                    "Found the princess".to_string()
+                } else {
+                    "The Quiet Pond".to_string()
+                }
+            } else {
+                format!("{} {}", self.level_no + 1, self.name)
+            }
+        } else {
+            format!("Road {}", self.level_no + 1)
+        };
+        if self.save.place(board, score, self.run).is_none() {
+            return;
+        }
+        let e = Entry {
+            score,
+            name: self.save.name.clone(),
+            reached,
+            tag: self.tag(),
+            run: self.run,
+        };
+        log::info!("a place in the {board} table for {score}");
+        // a game already in the table just moves up, under its name
+        if let Some(old) = self.save.boards[board].iter().find(|x| x.run == self.run) {
+            let e = Entry {
+                name: old.name.clone(),
+                ..e
+            };
+            self.save.insert(board, e);
+            self.persist();
+            return;
+        }
+        self.name_buf = self.save.name.clone();
+        self.pending = Some((board, e));
+        self.after_scores = next;
+        self.set_phase(Phase::EnterName);
+    }
+
+    fn name_event(&mut self, e: Ev) {
+        use ratatui::crossterm::event::KeyCode;
+        match e {
+            Ev::Raw(KeyCode::Char(c)) if !c.is_control() && c != ';' && c != '=' => {
+                if self.name_buf.chars().count() < NAME_LEN {
+                    self.name_buf.push(c);
+                }
+            }
+            Ev::Raw(KeyCode::Backspace) => {
+                self.name_buf.pop();
+            }
+            Ev::Raw(KeyCode::Enter) | Ev::Raw(KeyCode::Esc) | Ev::Confirm => {
+                let name = crate::save::clean(&self.name_buf, NAME_LEN);
+                let name = if name.is_empty() {
+                    "Toad".to_string()
+                } else {
+                    name
+                };
+                if let Some((board, mut entry)) = self.pending.take() {
+                    entry.name = name.clone();
+                    self.save.name = name;
+                    self.highlight = self.save.insert(board, entry).map(|at| (board, at));
+                    self.persist();
+                    self.set_phase(Phase::Scores(board));
+                } else {
+                    self.set_phase(Phase::Title);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn options_event(&mut self, e: Ev, audio: &mut Audio) {
+        let n = OPTION_ITEMS;
+        let by = match e {
+            Ev::Hop(_, Dir::Up) => {
+                self.opt_sel = (self.opt_sel + n - 1) % n;
+                audio.play(Sfx::Select);
+                return;
+            }
+            Ev::Hop(_, Dir::Down) => {
+                self.opt_sel = (self.opt_sel + 1) % n;
+                audio.play(Sfx::Select);
+                return;
+            }
+            Ev::Hop(_, Dir::Left) => -1,
+            Ev::Hop(_, Dir::Right) | Ev::Confirm => 1,
+            Ev::Pause | Ev::Back => {
+                self.set_phase(Phase::Title);
+                return;
+            }
+            _ => return,
+        };
+        match self.opt_sel {
+            0 => self.cycle_pace(by),
+            1 => {
+                let k = LIVES_OPTIONS.len() as i32;
+                self.save.lives = (self.save.lives as i32 + by).rem_euclid(k) as usize;
+                self.persist();
+            }
+            2 => {
+                audio.toggle_mute();
+                self.save.muted = audio.muted;
+                self.muted = audio.muted;
+                self.persist();
+            }
+            3 if e == Ev::Confirm => {
+                self.keys_sel = 0;
+                self.key_wait = false;
+                self.set_phase(Phase::Keys);
+            }
+            4 if e == Ev::Confirm => self.set_phase(Phase::Title),
+            _ => {}
+        }
+        audio.play(Sfx::Select);
+    }
+
+    /// The key each action has now, for the screen.
+    pub fn key_for(&self, i: usize) -> String {
+        self.save
+            .keys
+            .iter()
+            .find(|(a, _)| a == ACTIONS[i].0)
+            .map_or(DEFAULT_KEYS[i].to_string(), |(_, k)| k.clone())
+    }
+
+    fn keys_event(&mut self, e: Ev) {
+        use ratatui::crossterm::event::KeyCode;
+        // the actions, then "Put the usual keys back", then "Done"
+        let n = ACTIONS.len() + 2;
+        if self.key_wait {
+            if let Ev::Raw(k) = e {
+                self.key_wait = false;
+                if k == KeyCode::Esc {
+                    return;
+                }
+                if reserved(k) {
+                    self.flash("That key has a job already. Try another.");
+                    return;
+                }
+                let Some(name) = key_name(k) else {
+                    self.flash("That key cannot be used. Try another.");
+                    return;
+                };
+                let action = ACTIONS[self.keys_sel].0;
+                // a key does one hop: take it from any other action
+                let taken: Vec<usize> = (0..ACTIONS.len())
+                    .filter(|&j| j != self.keys_sel && self.key_for(j) == name)
+                    .collect();
+                self.save.keys.retain(|(a, _)| a != action);
+                self.save.keys.push((action.to_string(), name.clone()));
+                for j in taken {
+                    // a key does one hop: the other action lets go of it
+                    self.save.keys.retain(|(a, _)| a != ACTIONS[j].0);
+                    self.flash(&format!("{} lets go of that key.", ACTIONS[j].1));
+                }
+                self.binds_changed = true;
+                self.persist();
+                log::info!("key for {action}: {name}");
+            }
+            return;
+        }
+        match e {
+            Ev::Hop(_, Dir::Up) | Ev::Raw(KeyCode::Up) => {
+                self.keys_sel = (self.keys_sel + n - 1) % n
+            }
+            Ev::Hop(_, Dir::Down) | Ev::Raw(KeyCode::Down) => {
+                self.keys_sel = (self.keys_sel + 1) % n
+            }
+            Ev::Confirm if self.keys_sel < ACTIONS.len() => self.key_wait = true,
+            Ev::Confirm if self.keys_sel == ACTIONS.len() => {
+                self.save.keys.clear();
+                self.binds_changed = true;
+                self.persist();
+                self.flash("The usual keys are back.");
+            }
+            Ev::Confirm | Ev::Pause | Ev::Back => self.set_phase(Phase::Options),
+            _ => {}
         }
     }
 
@@ -813,6 +1152,9 @@ impl Game {
             if *dt >= wait {
                 if self.mode == Mode::Versus || *cause == Death::Splash {
                     p.respawn(&self.level, time);
+                } else if self.save.lives == LIVES_OPTIONS.len() - 1 {
+                    // lives that never run out
+                    p.respawn(&self.level, time);
                 } else if p.lives > 1 {
                     p.lives -= 1;
                     p.respawn(&self.level, time);
@@ -848,6 +1190,7 @@ impl Game {
                         self.persist();
                     }
                     self.set_phase(Phase::GameOver);
+                    self.submit(Next::GameOver);
                 }
             }
             return;
@@ -1084,6 +1427,7 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::crossterm::event::KeyCode;
 
     fn game(start: Start) -> Game {
         Game::new(start, Save::default())
@@ -1137,6 +1481,85 @@ mod tests {
             g.phase,
             g.players[0].lives
         );
+    }
+
+    /// Lose every life by standing still until the clock runs out.
+    fn run_out(g: &mut Game, audio: &mut Audio) {
+        g.set_phase(Phase::Play);
+        for _ in 0..60 * 60 * 10 {
+            g.tick(audio);
+            if g.phase != Phase::Play {
+                break;
+            }
+        }
+    }
+
+    #[test]
+    fn a_high_score_asks_for_a_name_once_a_game() {
+        let mut g = game(Start::Story(1));
+        let mut audio = Audio::silent();
+        let mut input = Input::new();
+        g.players[0].score = 700;
+        run_out(&mut g, &mut audio);
+        assert_eq!(g.phase, Phase::EnterName);
+        assert!(input.events.is_empty());
+        g.handle(&mut input, &mut audio);
+        assert!(input.raw, "typing a name takes keys as they are");
+        for k in [
+            KeyCode::Char('A'),
+            KeyCode::Char('x'),
+            KeyCode::Backspace,
+            KeyCode::Char('l'),
+            KeyCode::Enter,
+        ] {
+            input.events.push(Ev::Raw(k));
+        }
+        g.handle(&mut input, &mut audio);
+        assert_eq!(g.phase, Phase::Scores(BOARD_STORY));
+        assert_eq!(g.save.boards[BOARD_STORY][0].name, "Al");
+        assert_eq!(g.save.boards[BOARD_STORY][0].reached, "2 Market Road");
+        g.phase_t = 1.0;
+        input.events.push(Ev::Confirm);
+        g.handle(&mut input, &mut audio);
+        assert_eq!(g.phase, Phase::GameOver);
+        // try again, do better: the same line moves up, no second name
+        input.events.push(Ev::Confirm);
+        g.phase_t = 2.0;
+        g.handle(&mut input, &mut audio);
+        g.players[0].score = 900;
+        run_out(&mut g, &mut audio);
+        assert_eq!(g.phase, Phase::GameOver);
+        assert_eq!(g.save.boards[BOARD_STORY].len(), 1);
+        assert_eq!(g.save.boards[BOARD_STORY][0].score, 900);
+    }
+
+    #[test]
+    fn options_change_lives_and_pace() {
+        let mut save = Save::default();
+        save.lives = 2;
+        save.pace = 2;
+        let mut g = Game::new(Start::Story(1), save);
+        let mut audio = Audio::silent();
+        assert!(g.endless_lives());
+        assert_eq!(g.pace(), 1.0, "menus and cards run at full speed");
+        g.set_phase(Phase::Play);
+        assert_eq!(g.pace(), 0.5);
+        // standing still for ages: the clock runs out again and again, no game over
+        for _ in 0..60 * 60 * 5 {
+            g.tick(&mut audio);
+        }
+        assert_eq!(g.phase, Phase::Play);
+        assert_eq!(g.tag(), "slow, no game over");
+        let mut g = Game::new(
+            Start::Story(1),
+            Save {
+                lives: 1,
+                ..Save::default()
+            },
+        );
+        assert_eq!(g.players[0].lives, 9);
+        g.save.lives = 0;
+        assert_eq!(g.start_lives(), LIVES);
     }
 
     #[test]

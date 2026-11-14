@@ -2,8 +2,11 @@
 //! everything that moves so traffic glides half a column at a time; the
 //! backdrop of each world, the night's headlights, and the scenes.
 
+use crate::game::{self, OPTION_ITEMS};
 use crate::game::{Game, Mode, Overlay, Phase, RACE_TO};
+use crate::input::ACTIONS;
 use crate::levels::{self, KISSES, POND, TOAD_ART, WORLDS};
+use crate::save::{BOARD_LEN, BOARD_TITLES, BOARD_TODAY, LIVES_OPTIONS, NAME_LEN, PACES};
 use crate::world::{DT, Death, Dir, Ground, Kind, Lane, Level, Role, Surface, W};
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
@@ -191,6 +194,10 @@ pub fn draw(f: &mut Frame, g: &Game) {
     match g.phase {
         Phase::Title => title(&mut cv, g),
         Phase::Choose => choose(&mut cv, g),
+        Phase::Options => options(&mut cv, g),
+        Phase::Keys => keys(&mut cv, g),
+        Phase::Scores(b) => scores(&mut cv, g, b),
+        Phase::EnterName => enter_name(&mut cv, g),
         Phase::Prologue(i) => page(
             &mut cv,
             g,
@@ -1080,7 +1087,7 @@ fn hud(cv: &mut Canvas, g: &Game) {
     match g.mode {
         Mode::Together => {
             let p1 = &g.players[0];
-            let s = format!(" ▙▟×{} {:06}", p1.lives, p1.score);
+            let s = format!(" ▙▟×{} {:06}", lives_text(g, p1.lives), p1.score);
             cv.text(x0, y, &s, TOAD1, None);
             cv.centre(
                 y,
@@ -1089,7 +1096,7 @@ fn hud(cv: &mut Canvas, g: &Game) {
                 None,
             );
             if let Some(p2) = g.players.get(1) {
-                let s2 = format!("{:06} ▙▟×{} ", p2.score, p2.lives);
+                let s2 = format!("{:06} ▙▟×{} ", p2.score, lives_text(g, p2.lives));
                 cv.text(
                     a.right() as i32 - s2.chars().count() as i32 - 1,
                     y,
@@ -1127,7 +1134,7 @@ fn hud(cv: &mut Canvas, g: &Game) {
             };
             cv.text(x0, y, "PRINCE TOAD", (130, 220, 110), None);
             cv.text(x0 + 13, y, &place, TEXT, None);
-            let lives = format!("▙▟×{}", p.lives);
+            let lives = format!("▙▟×{}", lives_text(g, p.lives));
             let score = format!("SCORE {:06}", p.score);
             let mut x = a.right() as i32 - 1;
             if g.time > 0.0 {
@@ -1662,6 +1669,193 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
     }
 }
 
+fn lives_text(g: &Game, n: u32) -> String {
+    if g.endless_lives() && n > 0 {
+        "∞".to_string()
+    } else {
+        n.to_string()
+    }
+}
+
+/// A menu line: the toad marks the chosen one.
+fn menu_line(cv: &mut Canvas, x: i32, y: i32, sel: bool, s: &str) {
+    let line = if sel {
+        format!("▙▟ {s}")
+    } else {
+        format!("   {s}")
+    };
+    cv.text(x, y, &line, if sel { TOAD1 } else { DIM }, None);
+}
+
+fn options(cv: &mut Canvas, g: &Game) {
+    let inner = cv.panel(64, 16, "Options");
+    let x = inner.x as i32 + 1;
+    let y = inner.y as i32 + 1;
+    let pace = PACES[g.save.pace];
+    let rows: [(String, &str); OPTION_ITEMS] = [
+        (
+            format!("Pace          < {} >", pace.0),
+            match g.save.pace {
+                0 => "Everything at full speed.",
+                1 => "Everything at three quarters speed, the clock too.",
+                _ => "Everything at half speed, the clock too.",
+            },
+        ),
+        (
+            format!("Lives         < {} >", LIVES_OPTIONS[g.save.lives]),
+            match g.save.lives {
+                0 => "Five lives, and one more every 5000 points.",
+                1 => "Nine lives, like a cat. A toad can dream.",
+                _ => "Squashed toads just start the road again.",
+            },
+        ),
+        (
+            format!("Sound         < {} >", if g.muted { "off" } else { "on" }),
+            "Also M or F8, any time.",
+        ),
+        ("Keys".to_string(), "Choose your own keys for the hops."),
+        ("Done".to_string(), ""),
+    ];
+    for (i, (label, note)) in rows.iter().enumerate() {
+        let sel = i == g.opt_sel;
+        menu_line(cv, x, y + i as i32 * 2, sel, label);
+        if sel && !note.is_empty() {
+            cv.text(x + 3, y + i as i32 * 2 + 1, note, (150, 170, 150), None);
+        }
+    }
+    cv.text(
+        x,
+        inner.bottom() as i32 - 1,
+        "Up and down to choose, left and right to change",
+        (90, 110, 95),
+        None,
+    );
+    if g.save.pace > 0 || g.save.lives > 0 {
+        cv.text(
+            x,
+            inner.bottom() as i32 - 2,
+            "Scores made this way are marked in the tables.",
+            (90, 110, 95),
+            None,
+        );
+    }
+}
+
+fn keys(cv: &mut Canvas, g: &Game) {
+    let n = ACTIONS.len();
+    let inner = cv.panel(60, n as u16 + 9, "Keys");
+    let x = inner.x as i32 + 1;
+    let y = inner.y as i32 + 1;
+    for (i, a) in ACTIONS.iter().enumerate() {
+        let sel = i == g.keys_sel;
+        let key = if sel && g.key_wait {
+            "press a key...".to_string()
+        } else {
+            g.key_for(i).to_uppercase()
+        };
+        menu_line(cv, x, y + i as i32, sel, &format!("{:<22}{}", a.1, key));
+    }
+    menu_line(
+        cv,
+        x,
+        y + n as i32 + 1,
+        g.keys_sel == n,
+        "Put the usual keys back",
+    );
+    menu_line(cv, x, y + n as i32 + 2, g.keys_sel == n + 1, "Done");
+    let hint = if g.key_wait {
+        "Press the new key, or Esc to keep the old one"
+    } else {
+        "Enter to choose a key. The arrows always work too."
+    };
+    cv.text(x, inner.bottom() as i32 - 1, hint, (90, 110, 95), None);
+    if let Some((m, _)) = &g.msg {
+        cv.text(x, inner.bottom() as i32 - 2, m, GOLD, None);
+    }
+}
+
+fn scores(cv: &mut Canvas, g: &Game, b: usize) {
+    let inner = cv.panel(80, BOARD_LEN as u16 + 6, "High scores");
+    let x = inner.x as i32 + 1;
+    let y = inner.y as i32;
+    // the three tables as tabs
+    let mut tx = x;
+    for (i, t) in BOARD_TITLES.iter().enumerate() {
+        let s = format!(" {t} ");
+        let (fg, bg) = if i == b {
+            ((20, 30, 20), Some(TOAD1))
+        } else {
+            (DIM, None)
+        };
+        cv.text(tx, y, &s, fg, bg);
+        tx += s.chars().count() as i32 + 2;
+    }
+    let list = &g.save.boards[b];
+    let shown_today = b != BOARD_TODAY || g.save.daily_day == game::today();
+    if list.is_empty() || !shown_today {
+        cv.centre(y + 4, "Nobody yet. The road is waiting.", TEXT, None);
+    } else {
+        for (i, e) in list.iter().enumerate() {
+            let lit = g.highlight == Some((b, i));
+            let colour = if lit {
+                GOLD
+            } else if i == 0 {
+                TOAD1
+            } else {
+                TEXT
+            };
+            let line = format!(
+                "{} {}. {:<10} {:>7}  {}",
+                if lit { "▙▟" } else { "  " },
+                i + 1,
+                e.name,
+                e.score,
+                e.reached
+            );
+            let yy = y + 2 + i as i32;
+            cv.text(x, yy, &line, colour, None);
+            if !e.tag.is_empty() {
+                let tag = format!("({})", e.tag);
+                cv.text(
+                    inner.right() as i32 - tag.chars().count() as i32 - 1,
+                    yy,
+                    &tag,
+                    (120, 140, 120),
+                    None,
+                );
+            }
+        }
+    }
+    cv.text(
+        x,
+        inner.bottom() as i32 - 1,
+        "Left and right for the other tables, Enter to go on",
+        (90, 110, 95),
+        None,
+    );
+}
+
+fn enter_name(cv: &mut Canvas, g: &Game) {
+    let inner = cv.panel(56, 10, "A high score!");
+    let y = inner.y as i32;
+    let score = g.players.first().map_or(0, |p| p.score);
+    cv.centre(
+        y + 1,
+        &format!("{score} points. That goes in the table."),
+        GOLD,
+        None,
+    );
+    cv.centre(y + 3, "Your name:", TEXT, None);
+    let blink = (g.phase_t * 2.0) as i32 % 2 == 0;
+    let field = format!("{}{}", g.name_buf, if blink { "▁" } else { " " });
+    let fx = inner.x as i32 + (inner.width as i32 - NAME_LEN as i32) / 2;
+    for i in 0..NAME_LEN as i32 + 1 {
+        cv.put(fx + i, y + 4, ' ', TEXT, Some((30, 44, 36)));
+    }
+    cv.text(fx, y + 4, &field, TOAD1, Some((30, 44, 36)));
+    cv.centre(y + 6, "Type, then Enter", (90, 110, 95), None);
+}
+
 fn game_over(cv: &mut Canvas, g: &Game) {
     cv.dim(0.4);
     let inner = cv.panel(56, 9, "Game over");
@@ -1714,11 +1908,13 @@ fn won(cv: &mut Canvas, g: &Game, p: usize) {
 
 fn pause(cv: &mut Canvas, g: &Game) {
     cv.dim(0.5);
-    let inner = cv.panel(36, 8, "Paused");
+    let inner = cv.panel(36, 9, "Paused");
+    let pace = format!("Pace: {}", PACES[g.save.pace].0);
     let items = [
         "Go on",
         "Controls",
         if g.muted { "Sound: off" } else { "Sound: on" },
+        pace.as_str(),
         "Back to the title",
     ];
     for (i, it) in items.iter().enumerate() {

@@ -4,6 +4,7 @@
 //! - Player two: arrows, numpad 8 4 6 2, diagonals numpad 7 9 1 3
 //!   (or Home, PgUp, End, PgDn with Num Lock off)
 //! - Alone, every one of those keys moves you.
+//! - Keys chosen in the options come first.
 //! - Enter or Space: go on, Esc or P: pause, H or F1: help, M or F8: sound,
 //!   Ctrl+C: quit at once.
 //!
@@ -25,6 +26,81 @@ pub enum Ev {
     Help,
     Mute,
     Exit,
+    /// A key as it is, while the game wants one (a name, a key to choose).
+    Raw(KeyCode),
+}
+
+/// The hops that can be given other keys in the options: (save name, label,
+/// player, direction).
+pub const ACTIONS: [(&str, &str, usize, Dir); 8] = [
+    ("p1_up", "Player one: up", 0, Dir::Up),
+    ("p1_left", "Player one: left", 0, Dir::Left),
+    ("p1_down", "Player one: down", 0, Dir::Down),
+    ("p1_right", "Player one: right", 0, Dir::Right),
+    ("p2_up", "Player two: up", 1, Dir::Up),
+    ("p2_left", "Player two: left", 1, Dir::Left),
+    ("p2_down", "Player two: down", 1, Dir::Down),
+    ("p2_right", "Player two: right", 1, Dir::Right),
+];
+
+/// The keys every action has without any choosing.
+pub const DEFAULT_KEYS: [&str; 8] = ["w", "a", "s", "d", "up", "left", "down", "right"];
+
+/// A key's name in the save and on screen.
+pub fn key_name(k: KeyCode) -> Option<String> {
+    Some(match k {
+        KeyCode::Char(' ') => "space".into(),
+        KeyCode::Char(c) if !c.is_control() => c.to_lowercase().to_string(),
+        KeyCode::Up => "up".into(),
+        KeyCode::Down => "down".into(),
+        KeyCode::Left => "left".into(),
+        KeyCode::Right => "right".into(),
+        KeyCode::Home => "home".into(),
+        KeyCode::End => "end".into(),
+        KeyCode::PageUp => "pageup".into(),
+        KeyCode::PageDown => "pagedown".into(),
+        KeyCode::Insert => "insert".into(),
+        KeyCode::Delete => "delete".into(),
+        KeyCode::Tab => "tab".into(),
+        KeyCode::F(n) => format!("f{n}"),
+        _ => return None,
+    })
+}
+
+pub fn parse_key(s: &str) -> Option<KeyCode> {
+    Some(match s {
+        "space" => KeyCode::Char(' '),
+        "up" => KeyCode::Up,
+        "down" => KeyCode::Down,
+        "left" => KeyCode::Left,
+        "right" => KeyCode::Right,
+        "home" => KeyCode::Home,
+        "end" => KeyCode::End,
+        "pageup" => KeyCode::PageUp,
+        "pagedown" => KeyCode::PageDown,
+        "insert" => KeyCode::Insert,
+        "delete" => KeyCode::Delete,
+        "tab" => KeyCode::Tab,
+        _ => {
+            let mut cs = s.chars();
+            let c = cs.next()?;
+            if cs.as_str().is_empty() {
+                KeyCode::Char(c)
+            } else if let Some(n) = s.strip_prefix('f').and_then(|n| n.parse().ok()) {
+                KeyCode::F(n)
+            } else {
+                return None;
+            }
+        }
+    })
+}
+
+/// Keys that keep their own jobs and cannot be given to a hop.
+pub fn reserved(k: KeyCode) -> bool {
+    matches!(
+        k,
+        KeyCode::Enter | KeyCode::Esc | KeyCode::Backspace | KeyCode::F(1) | KeyCode::F(8)
+    )
 }
 
 #[cfg(feature = "gamepad")]
@@ -56,6 +132,10 @@ pub struct Input {
     #[cfg(feature = "gamepad")]
     pads: [PadState; 2],
     pub pad_names: Vec<String>,
+    /// Keys chosen in the options, looked at before the usual ones.
+    pub binds: Vec<(KeyCode, usize, Dir)>,
+    /// Hand keys over as they are (`Ev::Raw`).
+    pub raw: bool,
 }
 
 fn combine(a: Dir, b: Dir) -> Option<Dir> {
@@ -79,7 +159,20 @@ impl Input {
             #[cfg(feature = "gamepad")]
             pads: Default::default(),
             pad_names: Vec::new(),
+            binds: Vec::new(),
+            raw: false,
         }
+    }
+
+    /// Take the chosen keys from the save's (action, key) pairs.
+    pub fn set_binds(&mut self, keys: &[(String, String)]) {
+        self.binds = keys
+            .iter()
+            .filter_map(|(a, k)| {
+                let (_, _, p, d) = ACTIONS.iter().find(|x| x.0 == a)?;
+                Some((parse_key(k)?, *p, *d))
+            })
+            .collect();
     }
 
     pub fn open_pad(&mut self) {
@@ -247,6 +340,18 @@ impl Input {
             self.events.push(Ev::Exit);
             return;
         }
+        if self.raw {
+            self.events.push(Ev::Raw(k.code));
+            return;
+        }
+        let code = match k.code {
+            KeyCode::Char(c) => KeyCode::Char(c.to_ascii_lowercase()),
+            c => c,
+        };
+        if let Some((_, p, d)) = self.binds.iter().find(|b| b.0 == code) {
+            self.events.push(Ev::Hop(*p, *d));
+            return;
+        }
         let hop = |p: usize, d: Dir| Some(Ev::Hop(p, d));
         let ev = match k.code {
             KeyCode::Char('w' | 'W') => hop(0, Dir::Up),
@@ -275,5 +380,46 @@ impl Input {
         if let Some(e) = ev {
             self.events.push(e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::crossterm::event::KeyEventState;
+
+    fn press(c: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code: c,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        }
+    }
+
+    #[test]
+    fn key_names_round_trip_and_chosen_keys_win() {
+        for k in [
+            KeyCode::Char('i'),
+            KeyCode::Up,
+            KeyCode::F(5),
+            KeyCode::Char(' '),
+            KeyCode::Home,
+        ] {
+            assert_eq!(parse_key(&key_name(k).unwrap()), Some(k));
+        }
+        for d in DEFAULT_KEYS {
+            assert!(parse_key(d).is_some());
+        }
+        let mut i = Input::new();
+        i.set_binds(&[("p1_up".into(), "i".into()), ("nope".into(), "x".into())]);
+        assert_eq!(i.binds.len(), 1);
+        i.on_key(press(KeyCode::Char('I')));
+        i.on_key(press(KeyCode::Char('w')));
+        assert_eq!(i.events, vec![Ev::Hop(0, Dir::Up), Ev::Hop(0, Dir::Up)]);
+        i.events.clear();
+        i.raw = true;
+        i.on_key(press(KeyCode::Char('x')));
+        assert_eq!(i.events, vec![Ev::Raw(KeyCode::Char('x'))]);
     }
 }
