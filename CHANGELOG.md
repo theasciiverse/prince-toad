@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.0
+
+- Whatever waits on the far side stands tall against the sky, so you can
+  see the mailbox, the cow or the duchess before you get there
+- A drawbridge over the moat that goes up now and then
+- Market stalls on Market Road
+- Rain on the endless road now and then: a hop onto a wet road slides
+  one further
+- A line for whatever flattened him: the goose always wins
+- World cards show the way so far, a heart for every kiss
+- The finale moves: the kiss that changes nothing, half a crown each,
+  and at last a prince
+
 ## 0.8.0
 
 - Options on the title: the pace (normal, gentle at three quarters speed,

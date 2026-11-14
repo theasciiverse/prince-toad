@@ -11,8 +11,9 @@ ending with the Co-Authored-By line, versions 0.x.0 while unfinished.
 2026-11-15. Tagged v0.5.0 (the whole story, first road to the pond),
 v0.6.0 (trains, flies, today's road, two players together, livelier kiss
 scenes, world tunes), v0.7.0 (fog and plank crossings on the endless
-road) and v0.8.0 (options, high-score tables, the kiss scenes' moment of
-hope). v0.7.0 and later are tagged but have no release builds: GitHub
+road), v0.8.0 (options, high-score tables, the kiss scenes' moment of
+hope) and v0.9.0 (the waiting kiss on the horizon, drawbridge, stalls,
+rain, squash lines, a finale that moves). v0.7.0 and later are tagged but have no release builds: GitHub
 Actions refuses jobs on the private theasciiverse repos over account
 billing. Nobody has played it yet but the solver and the demo; speeds and
 clocks want a human hand (ROADMAP.md). Waiting on David: the name check
@@ -120,6 +121,15 @@ with the plain word; nothing found by web search so far.
   (`KISS_HOPE`) and fizzle (`KISS_FIZZLE`), with their own sounds; then
   the story, then a verdict (`levels::VERDICTS`), and a tally of kisses
   and princes. A test checks every scene fits at 100x30 and 80x24.
+- **0.9:** the kiss art stands on the far bank's horizon when the sky has
+  room (colour pushed away from what is behind it, `contrast`); a
+  drawbridge (`=`, `Kind::Bridge`, a stationary floater on `dive`'s
+  bridge cycle) in The Moat; market stalls (`M`, blockers) on Market
+  Road; rain on endless highway and night roads (`Level::rain`: a hop
+  onto a road slides one more, once); `levels::squashed_by` and the other
+  death lines; the way so far on world cards; the finale drawn by
+  `render::finale` with the hope and fizzle, the crown shared, and
+  "Princes: 1".
 
 ## How it works
 

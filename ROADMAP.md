@@ -21,10 +21,16 @@ Fog and plank crossings on the endless road; small fixes.
 Options (pace, lives, sound, keys), high-score tables with names, the
 kiss scenes' moment of hope, a gentler step up to the highway.
 
+## 0.9.0 (2026-11-15)
+
+The waiting kiss on the horizon, a drawbridge, market stalls, rain on
+the endless road, lines for every squash, the way so far on the world
+cards, a finale that moves.
+
 ## Towards 1.0
 
+- **David's own play-through** of the whole story before 1.0.0.
 - **Played by people and tuned by feel:** speeds, gaps and clocks per
   crossing, the pond's sinking time, lives.
-- **More world variety:** a market day with stalls, rain that makes roads
-  slick, a drawbridge that goes up and down.
+- **More world variety:** rain in a story crossing too, perhaps.
 - **Endless:** a record per world.
