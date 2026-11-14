@@ -92,6 +92,16 @@ impl Canvas<'_> {
         cell.modifier = Modifier::empty();
     }
 
+    /// Nothing drawn at this cell yet but its background.
+    fn empty_at(&self, x: i32, y: i32) -> bool {
+        let a = self.area;
+        x >= a.x as i32
+            && y >= a.y as i32
+            && x < a.right() as i32
+            && y < a.bottom() as i32
+            && self.buf[(x as u16, y as u16)].symbol() == " "
+    }
+
     fn bg_at(&self, x: i32, y: i32) -> Rgb {
         if x < self.area.x as i32
             || y < self.area.y as i32
@@ -1652,7 +1662,7 @@ fn finale(cv: &mut Canvas, g: &Game, i: usize) {
                 } else {
                     ('·', (120, 120, 110))
                 };
-                if y <= ground && y > inner.y as i32 {
+                if y <= ground && y > inner.y as i32 && cv.empty_at(x, y) {
                     cv.put(x, y, ch, fg, None);
                 }
             }
@@ -1939,7 +1949,7 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
             } else {
                 ('·', (120, 120, 110))
             };
-            if y < ground + 1 && y > inner.y as i32 {
+            if y < ground + 1 && y > inner.y as i32 && cv.empty_at(x, y) {
                 cv.put(x, y, ch, fg, None);
             }
         }
