@@ -573,7 +573,7 @@ impl Game {
                     3 => self.cycle_pace(1),
                     _ => {
                         self.overlay = None;
-                        let playing = self.phase == Phase::Play;
+                        let playing = matches!(self.phase, Phase::Play | Phase::WorldCard);
                         self.set_phase(Phase::Title);
                         if playing {
                             self.submit(Next::Title);

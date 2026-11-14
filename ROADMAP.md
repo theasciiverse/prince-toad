@@ -16,6 +16,11 @@ together, livelier kiss scenes, a tune per world, tighter clocks.
 
 Fog and plank crossings on the endless road; small fixes.
 
+## 0.8.0 (2026-11-15)
+
+Options (pace, lives, sound, keys), high-score tables with names, the
+kiss scenes' moment of hope, a gentler step up to the highway.
+
 ## Towards 1.0
 
 - **Played by people and tuned by feel:** speeds, gaps and clocks per

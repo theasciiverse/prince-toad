@@ -7,13 +7,17 @@ CLAUDE.md files): no em-dashes or en-dashes anywhere, store text describes
 the game and nothing defensive, commits as `David <sandquist@gmail.com>`
 ending with the Co-Authored-By line, versions 0.x.0 while unfinished.
 
-**Status:** built overnight on rover, 2026-11-13/14. Tagged and released
-v0.5.0 (the whole story, first road to the pond), v0.6.0 (trains, flies,
-today's road, two players together, livelier kiss scenes, world tunes)
-and v0.7.0 (fog and plank crossings on the endless road). Nobody has
-played it yet but the solver and the demo; speeds and clocks want a human
-hand (ROADMAP.md). Waiting on David: the name check below, and going
-public (hub's `tools/go-public.sh --run`, then re-push the newest tag).
+**Status:** built overnight on rover, 2026-11-13/14, carried on
+2026-11-15. Tagged v0.5.0 (the whole story, first road to the pond),
+v0.6.0 (trains, flies, today's road, two players together, livelier kiss
+scenes, world tunes), v0.7.0 (fog and plank crossings on the endless
+road) and v0.8.0 (options, high-score tables, the kiss scenes' moment of
+hope). v0.7.0 and later are tagged but have no release builds: GitHub
+Actions refuses jobs on the private theasciiverse repos over account
+billing. Nobody has played it yet but the solver and the demo; speeds and
+clocks want a human hand (ROADMAP.md). Waiting on David: the name check
+below, going public (hub's `tools/go-public.sh --run`, then re-push the
+newest tag), and his own play-through before 1.0.0.
 
 ## David's notes (copied from games/prince-toad/CLAUDE.md on the main machine)
 
@@ -101,6 +105,21 @@ with the plain word; nothing found by web search so far.
   `session.log` beside it (`RUST_LOG=debug` for every key and a snapshot
   every second).
 - 80x24 smallest, drawn for 100x30.
+- **Options** (0.8): pace (normal, gentle 0.75, slow 0.5: `Game::pace`
+  scales the main loop's clock during play only, so the toad, traffic and
+  the crossing clock all slow together), lives (5, 9, never run out),
+  sound (on, quiet, off), keys for the eight hops (`input::ACTIONS`,
+  saved as `key=p1_up:i`; chosen keys are looked at before the usual
+  ones, which keep working). Pace also in the pause menu.
+- **High scores** (0.8): a table of 8 each for the story, the endless
+  road and today's road (`save::Entry`, `score=` lines). A game offers
+  its score at game over, at the end of the finale and when quitting to
+  the title; a new line asks for a name, a retried story keeps its one
+  line (`run`). Scores made with a slower pace or more lives carry a tag.
+- **Kiss scenes** (0.8): smack, then sparkles gather round him
+  (`KISS_HOPE`) and fizzle (`KISS_FIZZLE`), with their own sounds; then
+  the story, then a verdict (`levels::VERDICTS`), and a tally of kisses
+  and princes. A test checks every scene fits at 100x30 and 80x24.
 
 ## How it works
 

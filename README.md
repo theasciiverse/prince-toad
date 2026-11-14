@@ -28,6 +28,11 @@ land on them.
 
 ## Options
 
+On the title, Options sets the pace (normal, gentle or slow: the whole
+world runs slower, the clock too), the lives (5, 9 or never run out),
+the sound (on, quiet or off) and your own keys for the hops. High scores
+keeps a table each for the story, the endless road and today's road.
+
 ```
 prince-toad [--endless] [--two] [--together] [--crossing N] [--demo] [--mute]
 ```

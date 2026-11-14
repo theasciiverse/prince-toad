@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0
+
+- Options on the title: the pace (normal, gentle at three quarters speed,
+  or slow at half speed), lives (5, 9, or never run out), sound (on,
+  quiet or off) and your own keys for the hops
+- The pace can be changed from the pause menu too
+- High-score tables for the story, the endless road and today's road,
+  with your name and how far you got; scores made with gentler settings
+  are marked
+- Kiss scenes: a moment of hope as sparkles gather round him, then they
+  fizzle out; the last word on every kiss; a tally of kisses and princes
+- The first highway crossings are a little kinder after the village
+
 ## 0.7.0
 
 - Fog on the endless road now and then: only the lanes near you can be
