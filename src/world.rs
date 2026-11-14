@@ -109,6 +109,10 @@ pub enum Kind {
     Flowers,
     House,
     Reeds,
+    /// A drawbridge over the moat: it stands still and goes up now and then.
+    Bridge,
+    /// A market stall: in the way.
+    Stall,
 }
 
 impl Kind {
@@ -145,6 +149,8 @@ impl Kind {
             'y' => Kind::Flowers,
             'H' => Kind::House,
             'v' => Kind::Reeds,
+            '=' => Kind::Bridge,
+            'M' => Kind::Stall,
             _ => return None,
         })
     }
@@ -155,8 +161,8 @@ impl Kind {
             Car | Truck | Bike | Cart | Tractor | Goose | Moto | Plow | Sled | Knight
             | Carriage | Fire | Guard | Train => Role::Hazard,
             Log | Turtle | DivingTurtle | Floe | CrackingFloe | Pad | Barrel | Duck
-            | DivingDuck => Role::Floater,
-            Hedge | Rock | Tree | Lamp | Cactus | House => Role::Blocker,
+            | DivingDuck | Bridge => Role::Floater,
+            Hedge | Rock | Tree | Lamp | Cactus | House | Stall => Role::Blocker,
             Flowers | Reeds => Role::Deco,
         }
     }
@@ -164,7 +170,7 @@ impl Kind {
     pub fn dives(self) -> bool {
         matches!(
             self,
-            Kind::DivingTurtle | Kind::CrackingFloe | Kind::DivingDuck
+            Kind::DivingTurtle | Kind::CrackingFloe | Kind::DivingDuck | Kind::Bridge
         )
     }
 }
@@ -275,10 +281,26 @@ impl Lane {
     }
 }
 
-/// Diving things dive on a cycle; each item has its own phase.
+/// A drawbridge is down for a while, goes up, stays up, comes down.
+pub const BRIDGE_CYCLE: f32 = 7.0;
+const BRIDGE_DOWN: f32 = 4.0;
+const BRIDGE_UP: f32 = 4.8;
+
+/// Diving things dive on a cycle; each item has its own phase. Drawbridges
+/// on one lane go up together.
 pub fn dive(item: &Item, t: f32) -> Surface {
     if !item.kind.dives() {
         return Surface::Up;
+    }
+    if item.kind == Kind::Bridge {
+        let p = (t + 1.5).rem_euclid(BRIDGE_CYCLE);
+        return if p < BRIDGE_DOWN {
+            Surface::Up
+        } else if p < BRIDGE_UP {
+            Surface::Sinking((p - BRIDGE_DOWN) / (BRIDGE_UP - BRIDGE_DOWN))
+        } else {
+            Surface::Under
+        };
     }
     let p = (t + item.x0 * 0.173).rem_euclid(DIVE_CYCLE);
     if p < DIVE_SINK {

@@ -379,6 +379,8 @@ fn body_color(kind: Kind, seed: u32) -> Rgb {
         Kind::Pad => (64, 150, 70),
         Kind::Barrel => (142, 96, 50),
         Kind::Hedge => (32, 92, 38),
+        Kind::Bridge => (128, 92, 56),
+        Kind::Stall => (196, 64, 54),
         _ => (200, 200, 200),
     }
 }
@@ -401,6 +403,8 @@ fn solid(kind: Kind) -> bool {
             | Kind::Pad
             | Kind::Barrel
             | Kind::Hedge
+            | Kind::Bridge
+            | Kind::Stall
     )
 }
 
@@ -475,6 +479,19 @@ fn detail(
         }
         Kind::Log => (k % 3 == 1).then_some(('═', (86, 56, 28))),
         Kind::Barrel => (k % 2 == 1).then_some(('║', (90, 60, 30))),
+        Kind::Bridge => {
+            if k == 0 || k + 1 == len {
+                Some(('╫', (70, 60, 50)))
+            } else {
+                Some(('═', (92, 64, 36)))
+            }
+        }
+        // a striped awning over the goods
+        Kind::Stall => Some(if k % 2 == 0 {
+            ('▀', (240, 236, 220))
+        } else {
+            (['●', '♣', '◆', '●'][(seed as usize + k) % 4], [(240, 180, 40), (90, 170, 60), (200, 90, 160), (230, 110, 40)][(seed as usize + k) % 4])
+        }),
         Kind::Floe => (k % 4 == 2).then_some(('▒', (200, 220, 238))),
         Kind::CrackingFloe => match surf {
             Surface::Sinking(_) => {
@@ -1061,6 +1078,27 @@ fn draw_items(
                         Surface::Under => continue,
                         Surface::Up => {}
                     }
+                }
+                if it.kind == Kind::Bridge && surf != Surface::Up {
+                    // going up, or up: only its shadow on the water and the posts
+                    let s = match surf {
+                        Surface::Sinking(s) => s,
+                        _ => 1.0,
+                    };
+                    for col in a.floor() as i32..b.ceil() as i32 {
+                        if !(left..right).contains(&col) {
+                            continue;
+                        }
+                        let x = fx0 + col;
+                        let end = col == a.floor() as i32 || col + 1 == b.ceil() as i32;
+                        if end {
+                            cv.put(x, y, '┃', (70, 60, 50), None);
+                        } else if s < 1.0 {
+                            let under = cv.bg_at(x, y);
+                            cv.put(x, y, '▔', mix(body, under, s), Some(under));
+                        }
+                    }
+                    continue;
                 }
                 if it.kind == Kind::CrackingFloe && surf == Surface::Under {
                     for col in a.floor() as i32..b.ceil() as i32 {
