@@ -1578,9 +1578,28 @@ fn world_card(cv: &mut Canvas, g: &Game) {
     let pond = g.level.pond;
     let inner = cv.panel(
         60,
-        if pond { 9 } else { 8 },
+        if pond { 10 } else { 9 },
         &format!("World {}", g.world + 1),
     );
+    // the way so far: a heart for every kiss, the toad here, the crown at the end
+    if g.mode == Mode::Story {
+        let n = POND + 1;
+        let w = n as i32 * 2 - 1;
+        let x0 = inner.x as i32 + (inner.width as i32 - w) / 2;
+        let yy = inner.bottom() as i32 - 2;
+        for i in 0..n {
+            let (ch, fg) = if i == g.level_no {
+                ('●', TOAD1)
+            } else if i == POND {
+                ('w', GOLD)
+            } else if i < g.level_no {
+                ('♥', (230, 100, 130))
+            } else {
+                ('·', DIM)
+            };
+            cv.put(x0 + i as i32 * 2, yy, ch, fg, None);
+        }
+    }
     let y = inner.y as i32;
     cv.centre(y + 1, w.name, GOLD, None);
     cv.centre(y + 2, w.tagline, TEXT, None);

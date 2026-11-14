@@ -696,20 +696,45 @@ pub const KISSES: [Kiss; 19] = [
 /// A line for whatever flattened him, now and then a different one.
 pub fn squashed_by(kind: Kind, n: u32) -> &'static str {
     let lines: &[&str] = match kind {
-        Kind::Goose => &["Honked flat by a goose.", "The goose wins. The goose always wins."],
+        Kind::Goose => &[
+            "Honked flat by a goose.",
+            "The goose wins. The goose always wins.",
+        ],
         Kind::Cart => &["Run over by a cart of turnips.", "Cart: one. Toad: nil."],
-        Kind::Bike => &["Ding ding! Too late.", "Flattened by a bicycle bell's owner."],
+        Kind::Bike => &[
+            "Ding ding! Too late.",
+            "Flattened by a bicycle bell's owner.",
+        ],
         Kind::Tractor => &["A tractor. He never stood a chance.", "Ploughed."],
-        Kind::Car => &["Beep. Splat.", "That car did not even slow down.", "Squashed. Rude."],
-        Kind::Truck => &["A truck. Flatter than a pancake.", "Lorry: one. Toad: very flat."],
+        Kind::Car => &[
+            "Beep. Splat.",
+            "That car did not even slow down.",
+            "Squashed. Rude.",
+        ],
+        Kind::Truck => &[
+            "A truck. Flatter than a pancake.",
+            "Lorry: one. Toad: very flat.",
+        ],
         Kind::Moto => &["Vroom. Splat.", "A motorbike, going far too fast."],
-        Kind::Plow => &["Ploughed into the snowbank.", "Snowplough. He is part of the snowbank now."],
+        Kind::Plow => &[
+            "Ploughed into the snowbank.",
+            "Snowplough. He is part of the snowbank now.",
+        ],
         Kind::Sled => &["Run down by a sled. Wheee. Ow.", "Sledged."],
-        Kind::Knight => &["Trampled by a knight in shining armour.", "The knight did not see him. Knights never do."],
-        Kind::Carriage => &["Run over by a royal carriage. How grand.", "A carriage. At least it was a royal one."],
+        Kind::Knight => &[
+            "Trampled by a knight in shining armour.",
+            "The knight did not see him. Knights never do.",
+        ],
+        Kind::Carriage => &[
+            "Run over by a royal carriage. How grand.",
+            "A carriage. At least it was a royal one.",
+        ],
         Kind::Fire => &["Toasted.", "The dragon's snore singes him crispy."],
         Kind::Guard => &["Stepped on by a guard.", "The guard says sorry. Too late."],
-        Kind::Train => &["The train. Nothing more to say.", "Should have listened to the bell."],
+        Kind::Train => &[
+            "The train. Nothing more to say.",
+            "Should have listened to the bell.",
+        ],
         _ => &["Squashed."],
     };
     lines[n as usize % lines.len()]
