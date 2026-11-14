@@ -480,7 +480,7 @@ fn detail(
             }
         }
         // a striped awning over the goods
-        Kind::Stall => Some(if k % 2 == 0 {
+        Kind::Stall => Some(if k.is_multiple_of(2) {
             ('▀', (240, 236, 220))
         } else {
             (
