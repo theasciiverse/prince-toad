@@ -29,6 +29,22 @@ fn mix(a: Rgb, b: Rgb, k: f32) -> Rgb {
     (f(a.0, b.0), f(a.1, b.1), f(a.2, b.2))
 }
 
+fn luma(c: Rgb) -> f32 {
+    0.299 * c.0 as f32 + 0.587 * c.1 as f32 + 0.114 * c.2 as f32
+}
+
+/// A colour that stands out from what is behind it.
+fn contrast(fg: Rgb, bg: Rgb) -> Rgb {
+    let (lf, lb) = (luma(fg), luma(bg));
+    if (lf - lb).abs() >= 80.0 {
+        fg
+    } else if lb > 120.0 {
+        mix(fg, (25, 25, 30), 0.6)
+    } else {
+        mix(fg, (255, 255, 250), 0.6)
+    }
+}
+
 fn hash(a: i32, b: i32) -> u32 {
     let mut h = (a as u32).wrapping_mul(0x9E37_79B1) ^ (b as u32).wrapping_mul(0x85EB_CA77);
     h ^= h >> 15;
@@ -810,13 +826,36 @@ fn field(cv: &mut Canvas, g: &Game) {
         cv.put(sx, gm.fy0 + row as i32, wing, (40, 40, 45), None);
         cv.put(sx + 1, gm.fy0 + row as i32, '•', (20, 20, 25), None);
     }
-    // what waits on the far bank
+    // what waits on the far bank, standing tall against the sky where there is room
     if !lv.pond && g.mode == Mode::Story {
         let kiss = &KISSES[g.kiss];
         let mx = gm.fx0 + 40 - kiss.mark.chars().count() as i32 / 2;
         cv.text(mx, gm.fy0, kiss.mark, kiss.color, None);
-        if (t * 2.0) as i32 % 2 == 0 && gm.fy0 > top {
-            cv.put(gm.fx0 + 40, gm.fy0 - 1, '♥', (240, 90, 120), None);
+        let art = kiss.art;
+        let aw = art.iter().map(|l| l.chars().count()).max().unwrap_or(0) as i32;
+        let ah = art.len() as i32;
+        let mut heart_y = gm.fy0 - 1;
+        if sky_rows >= ah + 2 {
+            let ax = gm.fx0 + 40 - aw / 2;
+            let colour = if g.night {
+                scale(kiss.color, 0.75)
+            } else {
+                kiss.color
+            };
+            for (i, line) in art.iter().enumerate() {
+                let y = gm.fy0 - ah + i as i32;
+                for (j, ch) in line.chars().enumerate() {
+                    if ch != ' ' {
+                        let (x, y) = (ax + j as i32, y);
+                        let behind = cv.bg_at(x, y);
+                        cv.put(x, y, ch, contrast(colour, behind), None);
+                    }
+                }
+            }
+            heart_y = gm.fy0 - ah - 1;
+        }
+        if (t * 2.0) as i32 % 2 == 0 && heart_y >= top {
+            cv.put(gm.fx0 + 40, heart_y, '♥', (240, 90, 120), None);
         }
     }
     // the princess
