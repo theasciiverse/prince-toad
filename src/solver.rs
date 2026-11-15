@@ -201,3 +201,144 @@ mod report {
         }
     }
 }
+
+#[cfg(test)]
+mod human {
+    use super::*;
+    use crate::levels;
+    use crate::world::START_X;
+
+    /// Ticks between decisions: about four hops a second at most.
+    const EVERY: u64 = 14;
+    /// How far ahead the player looks, in decisions.
+    const DEPTH: usize = 3;
+
+    /// Does `plan` (one action per decision) keep the toad alive, judging
+    /// the lanes `late` ticks behind the truth? Rows gained, or None.
+    fn judge(lv: &Level, toad: &Toad, now: u64, late: u64, plan: &[Option<Dir>]) -> Option<i32> {
+        let mut t = toad.clone();
+        let start = t.row as i32;
+        for (d, &a) in plan.iter().enumerate() {
+            for k in 0..EVERY {
+                let tick = (now + d as u64 * EVERY + k + 1).saturating_sub(late);
+                match t.tick(lv, tick as f32 * DT, if k == 0 { a } else { None }) {
+                    Step::Died(_) => return None,
+                    Step::Crossed => return Some(10_000),
+                    _ => {}
+                }
+            }
+        }
+        // a player sees the gaps in a hedge from afar: count being near one
+        let reach = if t.row == 0 {
+            0
+        } else {
+            (0..40)
+                .find(|&k| {
+                    let dx = k as f32;
+                    [t.x - dx, t.x + dx]
+                        .iter()
+                        .any(|&x| (0.0..78.0).contains(&x) && !lv.blocked(t.row - 1, x))
+                })
+                .unwrap_or(40)
+        };
+        Some((start - t.row as i32) * 100 - reach)
+    }
+
+    /// The best first move a short-sighted player sees.
+    fn choose(lv: &Level, toad: &Toad, now: u64, late: u64) -> Option<Dir> {
+        let mut best: Option<(i32, usize, Option<Dir>)> = None;
+        let n = ACTIONS.len();
+        for code in 0..n.pow(DEPTH as u32) {
+            let mut c = code;
+            let plan: Vec<Option<Dir>> = (0..DEPTH)
+                .map(|_| {
+                    let a = ACTIONS[c % n];
+                    c /= n;
+                    a
+                })
+                .collect();
+            if let Some(g) = judge(lv, toad, now, late, &plan) {
+                // prefer gains, then the earlier actions in ACTIONS' order
+                let rank = code % n;
+                if best.is_none_or(|(bg, br, _)| g > bg || (g == bg && rank < br)) {
+                    best = Some((g, rank, plan[0]));
+                }
+            }
+        }
+        best.map_or(None, |b| b.2)
+    }
+
+    /// One crossing played by a short-sighted player from tick `t0`: deaths
+    /// before getting across (gives up at 10) and seconds taken by the last try.
+    fn play(lv: &Level, t0: u64, late: u64, limit: f32, why: &mut Vec<String>) -> (u32, f32) {
+        let mut deaths = 0;
+        let mut now = t0;
+        'tries: while deaths < 10 {
+            let mut toad = Toad::start(lv, START_X);
+            let begin = now;
+            loop {
+                if (now - begin) as f32 * DT > limit {
+                    deaths += 1;
+                    continue 'tries;
+                }
+                let a = choose(lv, &toad, now, late);
+                for k in 0..EVERY {
+                    now += 1;
+                    match toad.tick(lv, now as f32 * DT, if k == 0 { a } else { None }) {
+                        Step::Died(d) => {
+                            why.push(format!("{d:?}@{}", toad.row));
+                            deaths += 1;
+                            now += 60;
+                            continue 'tries;
+                        }
+                        Step::Crossed => return (deaths, (now - begin) as f32 * DT),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        (deaths, limit)
+    }
+
+    /// How a short-sighted player with a slow eye fares on each crossing:
+    /// `cargo test human -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn human_report() {
+        for (n, s) in levels::story().iter().enumerate() {
+            let lv = s.build();
+            if lv.pond {
+                continue;
+            }
+            for late in [6u64, 12] {
+                let mut why = Vec::new();
+                let runs: Vec<(u32, f32)> =
+                    (0..24).map(|i| play(&lv, i * 37, late, s.time, &mut why)).collect();
+                why.sort();
+                let mut tally: Vec<(usize, String)> = Vec::new();
+                for w in why {
+                    match tally.iter_mut().find(|t| t.1 == w) {
+                        Some(t) => t.0 += 1,
+                        None => tally.push((1, w)),
+                    }
+                }
+                tally.sort_by(|a, b| b.0.cmp(&a.0));
+                tally.truncate(4);
+                let deaths: u32 = runs.iter().map(|r| r.0).sum();
+                let worst = runs.iter().map(|r| r.0).max().unwrap_or(0);
+                let secs: f32 = runs.iter().map(|r| r.1).sum::<f32>() / runs.len() as f32;
+                println!(
+                    "{:>2} {:<24} eye {:>2} deaths per try {:>4.2} worst {:>2} secs {:>5.1} of {}",
+                    n + 1,
+                    s.name,
+                    late,
+                    deaths as f32 / runs.len() as f32,
+                    worst,
+                    secs,
+                    s.time
+                );
+                println!("      {tally:?}");
+            }
+        }
+    }
+}

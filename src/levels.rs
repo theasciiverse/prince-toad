@@ -60,19 +60,23 @@ pub struct Spec {
     pub time: f32,
     pub kiss: usize,
     pub night: bool,
+    /// Rain: a hop onto a wet road slides one further.
+    pub rain: bool,
     pub rows: Vec<(Ground, f32, f32, &'static str)>,
 }
 
 impl Spec {
     pub fn build(&self) -> Level {
         let pond = self.rows.iter().any(|r| r.0 == Ground::Pond);
-        Level::new(
+        let mut level = Level::new(
             self.rows
                 .iter()
                 .map(|&(g, s, w, p)| Lane::new(g, s, w, p))
                 .collect(),
             pond,
-        )
+        );
+        level.rain = self.rain;
+        level
     }
 }
 
@@ -97,6 +101,7 @@ pub fn story() -> Vec<Spec> {
             time: 30.0,
             kiss: 0,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "...T.......y..........T........y......T.....y......."),
                 r("grass", 0.0, "..y..........T...........y............y.....T......"),
@@ -113,6 +118,7 @@ pub fn story() -> Vec<Spec> {
             time: 30.0,
             kiss: 1,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "....H.......y.........T.........y.......H......y..."),
                 r("dirt", -3.0, "kkkkk.............kkkkk................kkkkk......"),
@@ -129,11 +135,12 @@ pub fn story() -> Vec<Spec> {
             time: 32.0,
             kiss: 2,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "..T......y.....T..........y..........T.....y......"),
                 r("dirt", 3.0, "kkkkk.............kkkkk...........kkkkk..........."),
                 r("dirt", -5.0, "bb.........bb...........bb..........bb............"),
-                r("dirt", 6.5, "bb.................bb..................bb........"),
+                r("dirt", 5.5, "bb.................bb..................bb........"),
                 r("grass", 0.0, "######.....########.......#######.....##########."),
                 r("dirt", -3.0, "rrrr............rrrr..................rrrr........"),
                 r("dirt", 2.0, "gg..gg..gg...............gg..gg..................."),
@@ -148,6 +155,7 @@ pub fn story() -> Vec<Spec> {
             time: 32.0,
             kiss: 3,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "....^..........^..................^.........^....."),
                 r("road", -5.0, "cccc...........cccc.................cccc.........."),
@@ -166,6 +174,7 @@ pub fn story() -> Vec<Spec> {
             time: 36.0,
             kiss: 4,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, ".^........^.........o......^..........o.....^....."),
                 r("sand", 0.0, "....^...........o..........^..............^......."),
@@ -187,6 +196,7 @@ pub fn story() -> Vec<Spec> {
             time: 36.0,
             kiss: 5,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "....H.......T.........H.........T.......H......T..."),
                 r("road", 8.0, "cccc.........cccc...........cccc.................."),
@@ -208,6 +218,7 @@ pub fn story() -> Vec<Spec> {
             time: 32.0,
             kiss: 6,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "..T....v.......T.......vv.......T.....v......T....."),
                 r("water", 2.0, "llllllllll..........llllllllll.........llllllll...."),
@@ -225,6 +236,7 @@ pub fn story() -> Vec<Spec> {
             time: 34.0,
             kiss: 7,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "v.v...T......vvv......T.........vv.....T....v.v..."),
                 r("water", -3.0, "UUUUUU.......uuuuuu.........UUUUUU.........uuuuuu..."),
@@ -244,6 +256,7 @@ pub fn story() -> Vec<Spec> {
             time: 36.0,
             kiss: 8,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "..vv....T.......v.v.......T.....vv......T...v....."),
                 r("water", 4.5, "llllllll.............lllllll..............llllll...."),
@@ -265,6 +278,7 @@ pub fn story() -> Vec<Spec> {
             time: 32.0,
             kiss: 9,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "..T.........T..........T.........T.........T......"),
                 r("snow", 0.0, "....o.................T.................o........."),
@@ -283,6 +297,7 @@ pub fn story() -> Vec<Spec> {
             time: 34.0,
             kiss: 10,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "....T.........o.........T.........o.........T....."),
                 r("water", 2.0, "iiiiiiii..........IIIIII..........iiiiiiii.........."),
@@ -302,9 +317,10 @@ pub fn story() -> Vec<Spec> {
             time: 38.0,
             kiss: 11,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "..T....T.........T....T.........T....T.......T...."),
-                r("snow", -7.0, "zz........zz.......................zz............."),
+                r("snow", -6.0, "zz........zz.......................zz............."),
                 r("ice", 0.0, ""),
                 skid("snow", 4.0, 3.0, "ssssssssss..........................cccc.........."),
                 r("snow", 0.0, "#####.....o....#######........o.....#######......."),
@@ -324,6 +340,7 @@ pub fn story() -> Vec<Spec> {
             time: 32.0,
             kiss: 12,
             night: true,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "....T.........*.........T.........*.........T....."),
                 r("road", -6.0, "cccc...............cccc.................cccc......"),
@@ -340,6 +357,7 @@ pub fn story() -> Vec<Spec> {
             time: 34.0,
             kiss: 13,
             night: true,
+            rain: true,
             rows: vec![
                 r("bank", 0.0, "..vv.....*.........vvv.........*........vv........"),
                 r("water", 2.5, "llllllllll............llllllll..........lllllll...."),
@@ -358,6 +376,7 @@ pub fn story() -> Vec<Spec> {
             time: 38.0,
             kiss: 14,
             night: true,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "..y..T......y.....T..*...y.....T......y....T...y.."),
                 r("dirt", 4.0, "rrrr.....................rrrr......................"),
@@ -380,6 +399,7 @@ pub fn story() -> Vec<Spec> {
             time: 32.0,
             kiss: 15,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "#####...#####...#####...#####...#####...#####......"),
                 r("cobble", -3.0, "w.....w.....w..............w.....w.....w..........."),
@@ -397,6 +417,7 @@ pub fn story() -> Vec<Spec> {
             time: 36.0,
             kiss: 16,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "y...y...y...y...y...y...y...y...y...y...y...y...y."),
                 r("moat", 0.0, "..........==========..............................==========...................."),
@@ -417,15 +438,16 @@ pub fn story() -> Vec<Spec> {
             time: 40.0,
             kiss: 17,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "....o.............o..............o.............o.."),
-                r("cobble", 14.0, "fff..........................................."),
+                r("cobble", 12.0, "fff..........................................."),
                 r("cobble", -6.0, "aaaaaa.................h..........aaaaaa.........."),
                 r("moat", 3.0, "xxx......xxxx...........xxx...........xxxx........."),
                 r("moat", -3.5, "DDDD..........DDDD...........dddd..........DDDD...."),
                 r("moat", 2.5, "xxxx..........xxx.............xxxx......xxx........"),
                 r("cobble", 0.0, "#####.........o.......#####.........o.......#####."),
-                r("cobble", -16.0, "ffff..........................................."),
+                r("cobble", -13.0, "ffff..........................................."),
                 r("cobble", 8.0, "h.........h.......................h..............."),
                 r("cobble", -5.0, "aaaaaa.............w.....w...............aaaaaa...."),
                 r("cobble", 0.0, "........o..........................o............."),
@@ -438,6 +460,7 @@ pub fn story() -> Vec<Spec> {
             time: 0.0,
             kiss: 18,
             night: false,
+            rain: false,
             rows: vec![
                 r("bank", 0.0, "v.vv..v...vvv..v.v...v..vv.v...vvv...v.v..vv...v.v"),
                 r("pond", 0.0, "....ppp......pp.......ppp.......pp.......ppp......."),

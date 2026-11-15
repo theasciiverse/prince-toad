@@ -340,6 +340,12 @@ impl Game {
         if self.level.pond {
             self.place_princess(None);
         }
+        if self.level.rain {
+            self.msg = Some((
+                "Rain! A hop onto a wet road slides one further.".into(),
+                3.5,
+            ));
+        }
         let lives = self.players.first().map_or(self.start_lives(), |p| p.lives);
         let score = self.players.first().map_or(0, |p| p.score);
         let next = self.players.first().map_or(EXTRA_LIFE, |p| p.next_life);
