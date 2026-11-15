@@ -7,7 +7,8 @@ use crate::input::{ACTIONS, DEFAULT_KEYS, key_name, reserved};
 use crate::input::{Ev, Input};
 use crate::levels::{self, GIGGLES, KISSES, POND};
 use crate::save::{
-    BOARD_ENDLESS, BOARD_STORY, BOARD_TODAY, Entry, LIVES_OPTIONS, NAME_LEN, PACES, Save,
+    BOARD_ENDLESS, BOARD_STORY, BOARD_TODAY, Entry, LIVES_OPTIONS, NAME_LEN, PACES, RECORD_WORLDS,
+    Save, tenths,
 };
 use crate::solver;
 use crate::world::{DT, Death, Dir, HOP_TICKS, Level, Role, START_X, Step, Surface, Toad, W};
@@ -1351,6 +1352,32 @@ impl Game {
                         2.5,
                     ));
                 }
+                // the endless road keeps a record per world: the quickest crossing
+                let p = &self.players[i];
+                if self.mode == Mode::Endless
+                    && !self.demo
+                    && self.save.pace == 0
+                    && self.world < RECORD_WORLDS
+                    && time > 0.0
+                {
+                    let took = (((time - p.time_left) * 10.0).round() as u32).max(1);
+                    let old = self.save.records[self.world];
+                    if old == 0 || took < old {
+                        self.save.records[self.world] = took;
+                        self.persist();
+                        log::info!("record for world {}: {}", self.world, tenths(took));
+                        self.msg = Some((
+                            format!(
+                                "A record for {}: across in {}!",
+                                levels::WORLDS[self.world].name,
+                                tenths(took)
+                            ),
+                            3.0,
+                        ));
+                        audio.play(Sfx::Life);
+                    }
+                }
+                let p = &mut self.players[i];
                 if self.mode == Mode::Versus && p.crossings >= RACE_TO {
                     self.set_phase(Phase::Won(i));
                     audio.play(Sfx::Fanfare);
@@ -1539,6 +1566,32 @@ mod tests {
             g.phase,
             g.players[0].lives
         );
+    }
+
+    #[test]
+    fn the_endless_road_keeps_a_record_per_world() {
+        let mut g = game(Start::Endless);
+        let mut audio = Audio::silent();
+        assert_eq!(g.phase, Phase::Play);
+        let p = &g.players[0];
+        let plan = solver::solve(&g.level, &p.toad, g.lt, (p.time_left / DT) as u64)
+            .expect("an endless road can be crossed");
+        'walk: for a in plan {
+            g.players[0].queued = a.map(|d| (d, 0));
+            for _ in 0..HOP_TICKS {
+                g.tick(&mut audio);
+                if g.phase != Phase::Play {
+                    break 'walk;
+                }
+            }
+        }
+        assert_eq!(g.phase, Phase::Crossed);
+        let first = g.save.records[0];
+        assert!(first > 0, "a first crossing is a record");
+        assert!(g.msg.as_ref().is_some_and(|m| m.0.contains("record")));
+        // a slower crossing of the same world leaves the record alone
+        g.save.records[0] = 1;
+        assert!(Save::parse(&g.save.text()).records[0] == 1);
     }
 
     /// Lose every life by standing still until the clock runs out.

@@ -6,7 +6,7 @@ use crate::game::{self, OPTION_ITEMS};
 use crate::game::{Game, Mode, Overlay, Phase, RACE_TO};
 use crate::input::ACTIONS;
 use crate::levels::{self, KISSES, POND, TOAD_ART, WORLDS};
-use crate::save::{BOARD_LEN, BOARD_TITLES, BOARD_TODAY, LIVES_OPTIONS, NAME_LEN, PACES};
+use crate::save::{BOARD_ENDLESS, BOARD_LEN, BOARD_TITLES, BOARD_TODAY, LIVES_OPTIONS, NAME_LEN, PACES};
 use crate::world::{DT, Death, Dir, Ground, Kind, Lane, Level, Role, Surface, W};
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
@@ -1302,7 +1302,19 @@ fn hud(cv: &mut Canvas, g: &Game) {
                     0
                 }
             ),
-            Mode::Endless => format!("Best on the endless road: {}", g.save.best_endless),
+            Mode::Endless => {
+                let rec = g.save.records.get(g.world).copied().unwrap_or(0);
+                if rec > 0 {
+                    format!(
+                        "Best on the endless road: {}    {} record: {}",
+                        g.save.best_endless,
+                        crate::save::RECORD_NAMES[g.world],
+                        crate::save::tenths(rec)
+                    )
+                } else {
+                    format!("Best on the endless road: {}", g.save.best_endless)
+                }
+            }
             Mode::Versus => "Player one: W A S D    Player two: arrows".to_string(),
             Mode::Together => {
                 "Both toads must get across. Player one: W A S D, player two: arrows".to_string()
@@ -2120,7 +2132,7 @@ fn keys(cv: &mut Canvas, g: &Game) {
 }
 
 fn scores(cv: &mut Canvas, g: &Game, b: usize) {
-    let inner = cv.panel(80, BOARD_LEN as u16 + 6, "High scores");
+    let inner = cv.panel(80, BOARD_LEN as u16 + 9, "High scores");
     let x = inner.x as i32 + 1;
     let y = inner.y as i32;
     // the three tables as tabs
@@ -2169,6 +2181,22 @@ fn scores(cv: &mut Canvas, g: &Game, b: usize) {
                     None,
                 );
             }
+        }
+    }
+    // the endless road's record per world, three to a line
+    if b == BOARD_ENDLESS {
+        let recs: Vec<String> = crate::save::RECORD_NAMES
+            .iter()
+            .zip(g.save.records.iter())
+            .map(|(n, &r)| {
+                let t = if r > 0 { crate::save::tenths(r) } else { "not yet".into() };
+                format!("{n} {t:<8}")
+            })
+            .collect();
+        let yy = inner.bottom() as i32 - 4;
+        cv.text(x, yy, "Records", GOLD, None);
+        for (k, chunk) in recs.chunks(3).enumerate() {
+            cv.text(x + 9, yy + k as i32, &chunk.join("   "), (150, 175, 140), None);
         }
     }
     cv.text(

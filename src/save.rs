@@ -81,6 +81,20 @@ pub struct Save {
     /// The name last typed into a high-score table.
     pub name: String,
     pub boards: [Vec<Entry>; 3],
+    /// The endless road's record per world: the quickest crossing, in
+    /// tenths of a second (0: none yet). Made at the normal pace only.
+    pub records: [u32; RECORD_WORLDS],
+}
+
+/// The endless road goes through the six worlds that have traffic.
+pub const RECORD_WORLDS: usize = 6;
+/// Short names for the records line.
+pub const RECORD_NAMES: [&str; RECORD_WORLDS] =
+    ["Village", "Highway", "River", "Winter", "Night", "Castle"];
+
+/// "4.2s" from tenths.
+pub fn tenths(t: u32) -> String {
+    format!("{}.{}s", t / 10, t % 10)
 }
 
 impl Save {
@@ -103,6 +117,14 @@ impl Save {
                 "pace" => s.pace = v.parse::<usize>().unwrap_or(0).min(PACES.len() - 1),
                 "lives" => s.lives = v.parse::<usize>().unwrap_or(0).min(LIVES_OPTIONS.len() - 1),
                 "name" => s.name = clean(v, NAME_LEN),
+                "record" => {
+                    if let Some((w, t)) = v.split_once(':')
+                        && let (Ok(w), Ok(t)) = (w.parse::<usize>(), t.parse::<u32>())
+                        && w < RECORD_WORLDS
+                    {
+                        s.records[w] = t;
+                    }
+                }
                 "key" => {
                     if let Some((a, k)) = v.split_once(':') {
                         s.keys.push((a.to_string(), k.to_string()));
@@ -150,6 +172,11 @@ impl Save {
         );
         for (a, k) in &self.keys {
             t.push_str(&format!("key={a}:{k}\n"));
+        }
+        for (w, r) in self.records.iter().enumerate() {
+            if *r > 0 {
+                t.push_str(&format!("record={w}:{r}\n"));
+            }
         }
         for (b, entries) in self.boards.iter().enumerate() {
             for e in entries {
@@ -250,6 +277,7 @@ mod tests {
             ],
             name: "Greta".into(),
             boards: Default::default(),
+            records: [31, 0, 52, 0, 0, 120],
         };
         s.insert(BOARD_ENDLESS, entry(500, 1));
         s.insert(
