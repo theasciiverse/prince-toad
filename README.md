@@ -12,6 +12,10 @@ headlights, the castle and its moat, and a quiet pond at the end. Plus an
 endless road, today's road (the same for everyone today), and two players
 at one keyboard, racing or crossing together.
 
+Between the worlds wait four boss roads, several screens tall, where the
+view rolls up after him and something climbs from below: a steamroller,
+the spring flood, a cloud of crows, and at last the dragon.
+
 ## Controls
 
 - Hop: W A S D or the arrows
@@ -51,6 +55,12 @@ cargo build --release
 
 Linux needs the ALSA and udev development packages (`libasound2-dev`,
 `libudev-dev`).
+
+## Cameos
+
+Westering, Panzer, Sleighride, Saalis, Lunar Descent, Marble Recovery,
+uXo, Hammurabi (BCG Games) and 1D-Pong, all from Asciiverse, and the
+goldfish, after Ondřej Žára's Goldfish.
 
 ## Licence
 

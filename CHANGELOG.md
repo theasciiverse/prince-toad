@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.0
+
+- Four boss roads between the worlds, each one several screens tall,
+  the view rolling up after him as he climbs: The Long Haul, with a
+  steamroller grinding up behind; The Thaw, with the meltwater rising;
+  The Long Night, with a cloud of crows sweeping in; and The Dragon
+  Wakes, with the dragon himself on his heels
+- Resting banks halfway up a boss road: reach one and a fall starts him
+  again from there, with time on the clock topped up
+- A best time for every boss road, shown on its card
+- Cameos from the rest of Asciiverse: Westering wagons, Panzer toy
+  tanks, Sleighride sleighs, the Saalis plane in the sky, a Lunar
+  Descent lander at night, Marble Recovery marbles, uXo bombs,
+  Hammurabi's rats and a 1D-Pong ball, and four new kisses to go with
+  them
+- A goldfish in the Quiet Pond who offers a wish
+- A saved game from before keeps its place in the story
+
 ## 1.0.0
 
 - The endless road keeps a record for every world: the quickest crossing

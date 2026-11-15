@@ -84,7 +84,16 @@ pub struct Save {
     /// The endless road's record per world: the quickest crossing, in
     /// tenths of a second (0: none yet). Made at the normal pace only.
     pub records: [u32; RECORD_WORLDS],
+    /// The story's boss roads: the quickest climb of each, in tenths of a
+    /// second (0: none yet). Made at the normal pace only.
+    pub boss_records: [u32; BOSSES],
 }
+
+/// Boss roads in the story (1.1).
+pub const BOSSES: usize = 4;
+/// Where the boss roads went into the story in 1.1, in the old numbering:
+/// a save from before them moves its place up past each one.
+const BOSSES_BEFORE_OLD: [usize; BOSSES] = [6, 12, 15, 18];
 
 /// The endless road goes through the six worlds that have traffic.
 pub const RECORD_WORLDS: usize = 6;
@@ -100,6 +109,7 @@ pub fn tenths(t: u32) -> String {
 impl Save {
     pub fn parse(text: &str) -> Save {
         let mut s = Save::default();
+        let mut numbered = false;
         for line in text.lines() {
             let Some((k, v)) = line.split_once('=') else {
                 continue;
@@ -107,6 +117,15 @@ impl Save {
             let v = v.trim();
             match k.trim() {
                 "reached" => s.reached = v.parse().unwrap_or(0),
+                "story" => numbered = v == "2",
+                "boss_record" => {
+                    if let Some((k, t)) = v.split_once(':')
+                        && let (Ok(k), Ok(t)) = (k.parse::<usize>(), t.parse::<u32>())
+                        && k < BOSSES
+                    {
+                        s.boss_records[k] = t;
+                    }
+                }
                 "best_story" => s.best_story = v.parse().unwrap_or(0),
                 "best_endless" => s.best_endless = v.parse().unwrap_or(0),
                 "finished" => s.finished = v == "1",
@@ -152,12 +171,15 @@ impl Save {
             b.sort_by(|a, b| b.score.cmp(&a.score));
             b.truncate(BOARD_LEN);
         }
+        if !numbered && s.reached > 0 {
+            s.reached += BOSSES_BEFORE_OLD.iter().filter(|&&b| b < s.reached).count();
+        }
         s
     }
 
     pub fn text(&self) -> String {
         let mut t = format!(
-            "reached={}\nbest_story={}\nbest_endless={}\nfinished={}\nmuted={}\nquiet={}\ndaily_day={}\ndaily_best={}\npace={}\nlives={}\nname={}\n",
+            "story=2\nreached={}\nbest_story={}\nbest_endless={}\nfinished={}\nmuted={}\nquiet={}\ndaily_day={}\ndaily_best={}\npace={}\nlives={}\nname={}\n",
             self.reached,
             self.best_story,
             self.best_endless,
@@ -176,6 +198,11 @@ impl Save {
         for (w, r) in self.records.iter().enumerate() {
             if *r > 0 {
                 t.push_str(&format!("record={w}:{r}\n"));
+            }
+        }
+        for (k, r) in self.boss_records.iter().enumerate() {
+            if *r > 0 {
+                t.push_str(&format!("boss_record={k}:{r}\n"));
             }
         }
         for (b, entries) in self.boards.iter().enumerate() {
@@ -278,6 +305,7 @@ mod tests {
             name: "Greta".into(),
             boards: Default::default(),
             records: [31, 0, 52, 0, 0, 120],
+            boss_records: [412, 0, 0, 655],
         };
         s.insert(BOARD_ENDLESS, entry(500, 1));
         s.insert(
@@ -293,6 +321,17 @@ mod tests {
             Save::default()
         );
         assert!(state_dir().is_none());
+    }
+
+    #[test]
+    fn a_save_from_before_the_boss_roads_keeps_its_place() {
+        // old 6 was Willow Ford, the river: now the Long Haul comes first
+        assert_eq!(Save::parse("reached=6\n").reached, 6);
+        assert_eq!(Save::parse("reached=7\n").reached, 8);
+        assert_eq!(Save::parse("reached=13\n").reached, 15);
+        // old 18 was the pond: now the Dragon Wakes comes first
+        assert_eq!(Save::parse("reached=18\n").reached, 21);
+        assert_eq!(Save::parse("story=2\nreached=7\n").reached, 7);
     }
 
     #[test]

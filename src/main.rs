@@ -37,7 +37,7 @@ whoever he might kiss is always on the other side of the road.
   --two             two players racing at one keyboard (W A S D against the
                     arrows)
   --together        two players on the endless road together
-  --crossing N      start the story at crossing N (1-19; 19 is the pond)
+  --crossing N      start the story at crossing N (1-23; 23 is the pond)
   --demo            watch the toad cross the story by itself (with
                     --crossing, from there)
   --mute            no sound

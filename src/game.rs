@@ -11,7 +11,9 @@ use crate::save::{
     Save, tenths,
 };
 use crate::solver;
-use crate::world::{DT, Death, Dir, HOP_TICKS, Level, Role, START_X, Step, Surface, Toad, W};
+use crate::world::{
+    ChaseKind, DT, Death, Dir, HOP_TICKS, Level, Role, START_X, Step, Surface, Toad, W,
+};
 
 pub const LIVES: u32 = 5;
 pub const EXTRA_LIFE: u32 = 5000;
@@ -101,6 +103,8 @@ pub struct Player {
     pub home: bool,
     pub start_x: f32,
     next_life: u32,
+    /// Where a lost life starts again: the start, or a boss road's resting bank.
+    pub check: usize,
 }
 
 impl Player {
@@ -118,11 +122,16 @@ impl Player {
             home: false,
             start_x,
             next_life: EXTRA_LIFE,
+            check: lv.height() - 1,
         }
     }
 
-    fn respawn(&mut self, lv: &Level, time: f32) {
-        self.toad = Toad::start(lv, self.start_x);
+    fn respawn(&mut self, lv: &mut Level, time: f32, t: f32) {
+        self.check = self.check.min(lv.height() - 1);
+        self.toad = Toad::start_at(self.check, self.start_x);
+        if let Some(ch) = &mut lv.chase {
+            ch.restart(self.check, t);
+        }
         self.best_row = self.toad.row;
         self.time_left = time;
         self.dead = None;
@@ -208,6 +217,13 @@ pub struct Game {
     /// This game, for its one line in a table.
     run: u64,
     binds_changed: bool,
+    /// The view's top row on a road taller than the screen (eased by the renderer).
+    pub cam: std::cell::Cell<f32>,
+    /// On a boss road: its card line, its chaser and which boss it is.
+    pub boss: Option<(&'static str, ChaseKind, usize)>,
+    /// The pond's goldfish: (seconds since it surfaced, x, row).
+    pub goldfish: Option<(f32, f32, usize)>,
+    goldfish_done: bool,
 }
 
 pub enum Start {
@@ -270,6 +286,10 @@ impl Game {
             after_scores: Next::Title,
             run: 0,
             binds_changed: true,
+            cam: std::cell::Cell::new(f32::NAN),
+            boss: None,
+            goldfish: None,
+            goldfish_done: false,
         };
         match start {
             Start::Title => {}
@@ -332,6 +352,13 @@ impl Game {
         self.fog = false;
         self.time = spec.time;
         self.kiss = spec.kiss;
+        self.boss = spec.boss.as_ref().map(|b| {
+            let k = all[..n].iter().filter(|s| s.boss.is_some()).count();
+            (b.tagline, b.chase, k)
+        });
+        self.cam.set(f32::NAN);
+        self.goldfish = None;
+        self.goldfish_done = false;
         self.lt = 0;
         self.bot = None;
         self.princess = None;
@@ -384,6 +411,8 @@ impl Game {
             ));
         }
         self.time = made.time;
+        self.boss = None;
+        self.cam.set(f32::NAN);
         self.level_no = n;
         self.name = format!("Road {}", n + 1);
         self.lt = 0;
@@ -401,7 +430,8 @@ impl Game {
         for (i, x) in xs.iter().enumerate() {
             if let Some(p) = self.players.get_mut(i) {
                 p.start_x = *x;
-                p.respawn(&self.level, made.time);
+                p.check = self.level.height() - 1;
+                p.respawn(&mut self.level, made.time, 0.0);
             } else {
                 let mut p = Player::new(&self.level, *x, made.time);
                 p.lives = self.start_lives();
@@ -1092,7 +1122,8 @@ impl Game {
             }
             return;
         }
-        let world_changes = levels::story()[next].world != self.world;
+        let all = levels::story();
+        let world_changes = all[next].world != self.world || all[next].boss.is_some();
         self.load_story(next);
         if self.save.reached < next {
             self.save.reached = next;
@@ -1129,6 +1160,7 @@ impl Game {
         }
         if self.level.pond && self.phase == Phase::Play {
             self.princess_tick(audio);
+            self.goldfish_tick(audio);
         }
         if self.phase == Phase::Play {
             self.fly_tick(t, audio);
@@ -1138,6 +1170,45 @@ impl Game {
                     audio.play(Sfx::Bell);
                 }
                 self.rang[r] = coming;
+            }
+        }
+    }
+
+    /// Halfway across the pond a goldfish surfaces and offers a wish (after
+    /// the old tale of the fisherman and the fish, and Ondřej Žára's
+    /// Goldfish). The wish, of course, does not help.
+    fn goldfish_tick(&mut self, audio: &mut Audio) {
+        let half = self.level.height() / 2;
+        if !self.goldfish_done {
+            let p = &self.players[0];
+            if p.dead.is_none() && p.toad.row <= half && p.toad.row > 0 {
+                let x = if p.toad.x < 40.0 {
+                    p.toad.x + 5.0
+                } else {
+                    p.toad.x - 6.0
+                };
+                self.goldfish = Some((0.0, x.clamp(2.0, 74.0), p.toad.row));
+                self.goldfish_done = true;
+                audio.play(Sfx::Sparkle);
+                self.msg = Some((
+                    "A goldfish pops up: \"Spare me, and I will grant you a wish!\"".into(),
+                    3.0,
+                ));
+            }
+            return;
+        }
+        if let Some((age, _, _)) = &mut self.goldfish {
+            let before = *age;
+            *age += DT;
+            if before < 3.0 && *age >= 3.0 {
+                audio.play(Sfx::Fizzle);
+                self.msg = Some((
+                    "He wishes to be a prince again. The goldfish blows a bubble. Pop. Still a toad.".into(),
+                    4.0,
+                ));
+            }
+            if *age > 6.5 {
+                self.goldfish = None;
             }
         }
     }
@@ -1194,13 +1265,13 @@ impl Game {
             let wait = if *cause == Death::Splash { 0.6 } else { 1.0 };
             if *dt >= wait {
                 if self.mode == Mode::Versus || *cause == Death::Splash {
-                    p.respawn(&self.level, time);
+                    p.respawn(&mut self.level, time, t);
                 } else if self.save.lives == LIVES_OPTIONS.len() - 1 {
                     // lives that never run out
-                    p.respawn(&self.level, time);
+                    p.respawn(&mut self.level, time, t);
                 } else if p.lives > 1 {
                     p.lives -= 1;
-                    p.respawn(&self.level, time);
+                    p.respawn(&mut self.level, time, t);
                 } else if self.mode == Mode::Together && other_alive {
                     // out, but the other toad carries on
                     let p = &mut self.players[i];
@@ -1283,6 +1354,22 @@ impl Game {
                     p.best_row = p.toad.row;
                     p.score += 10;
                 }
+                // a boss road's resting bank: a lost life starts again here,
+                // and the chaser starts again below it
+                if p.toad.row < p.check && self.level.checkpoints.contains(&p.toad.row) {
+                    p.check = p.toad.row;
+                    if let Some(ch) = &mut self.level.chase {
+                        ch.restart(p.toad.row, t);
+                    }
+                    p.time_left = p.time_left.max(time * 0.6);
+                    audio.play(Sfx::Life);
+                    if !two {
+                        self.msg = Some((
+                            "A resting bank! If he falls now, he starts again here.".into(),
+                            3.0,
+                        ));
+                    }
+                }
                 if self.level.pond
                     && let Some(item) = self.level.floater(p.toad.row, p.toad.x, t)
                 {
@@ -1298,7 +1385,7 @@ impl Game {
                 );
                 p.dead = Some((cause, 0.0));
                 audio.play(match cause {
-                    Death::Squashed | Death::TimeUp => Sfx::Splat,
+                    Death::Squashed | Death::TimeUp | Death::Caught => Sfx::Splat,
                     Death::Drowned | Death::Swept => Sfx::Splash,
                     Death::Splash => Sfx::Plop,
                 });
@@ -1310,6 +1397,9 @@ impl Game {
                     }
                     Death::Swept => "Carried off, all the way downstream.",
                     Death::TimeUp => "Too slow. He sits down for a rest.",
+                    Death::Caught => {
+                        levels::caught_by(self.level.chase.map_or(ChaseKind::Roller, |c| c.kind), n)
+                    }
                     Death::Squashed => self
                         .level
                         .hazard_kind(p.toad.row, p.toad.x, t)
@@ -1351,6 +1441,24 @@ impl Game {
                         format!("{who} kisses {}. Still a toad.", KISSES[self.kiss].name),
                         2.5,
                     ));
+                }
+                // a boss road keeps its own record: the quickest whole climb
+                if let Some((_, _, k)) = self.boss
+                    && story
+                    && !self.demo
+                    && self.save.pace == 0
+                    && k < self.save.boss_records.len()
+                {
+                    let took = ((self.lt as f32 * DT * 10.0).round() as u32).max(1);
+                    let old = self.save.boss_records[k];
+                    if old == 0 || took < old {
+                        self.save.boss_records[k] = took;
+                        self.persist();
+                        self.msg = Some((
+                            format!("A record for {}: up in {}!", self.name, tenths(took)),
+                            3.0,
+                        ));
+                    }
                 }
                 // the endless road keeps a record per world: the quickest crossing
                 let p = &self.players[i];
@@ -1675,9 +1783,15 @@ mod tests {
 
     /// The pond played to the end: each hop the one that keeps him dry and brings
     /// him nearest the princess, two hops ahead; then the finale, page by page.
+    const POND_SEED: u64 = 7;
+
     #[test]
     fn the_pond_is_played_to_the_finale_and_the_title() {
         let mut g = game(Start::Story(POND));
+        // the princess's pads are chosen from the seed: a fixed one, so the
+        // simple chaser below meets the same pond every run
+        g.seed = POND_SEED;
+        g.load_story(POND);
         let mut audio = Audio::silent();
         let mut input = Input::new();
         g.set_phase(Phase::Play);
@@ -1706,8 +1820,15 @@ mod tests {
                         let mut t = p.toad.clone();
                         let mut ok = true;
                         for k in 0..2 * HOP_TICKS as u64 {
-                            let want = if k == 0 { a } else if k == HOP_TICKS as u64 { b } else { None };
-                            if let Step::Died(_) = t.tick(&g.level, (now + k + 1) as f32 * DT, want) {
+                            let want = if k == 0 {
+                                a
+                            } else if k == HOP_TICKS as u64 {
+                                b
+                            } else {
+                                None
+                            };
+                            if let Step::Died(_) = t.tick(&g.level, (now + k + 1) as f32 * DT, want)
+                            {
                                 ok = false;
                                 break;
                             }

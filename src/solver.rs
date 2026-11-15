@@ -271,10 +271,18 @@ mod human {
     /// One crossing played by a short-sighted player from tick `t0`: deaths
     /// before getting across (gives up at 10) and seconds taken by the last try.
     fn play(lv: &Level, t0: u64, late: u64, limit: f32, why: &mut Vec<String>) -> (u32, f32) {
+        // a boss road's chaser and resting banks, as the game runs them
+        let mut lv = lv.clone();
+        let lv = &mut lv;
         let mut deaths = 0;
         let mut now = t0;
+        let start = now;
+        let mut check = lv.height() - 1;
         'tries: while deaths < 10 {
-            let mut toad = Toad::start(lv, START_X);
+            let mut toad = Toad::start_at(check, START_X);
+            if let Some(ch) = &mut lv.chase {
+                ch.restart(check, now as f32 * DT);
+            }
             let begin = now;
             loop {
                 if (now - begin) as f32 * DT > limit {
@@ -291,7 +299,15 @@ mod human {
                             now += 60;
                             continue 'tries;
                         }
-                        Step::Crossed => return (deaths, (now - begin) as f32 * DT),
+                        Step::Crossed => return (deaths, (now - start) as f32 * DT),
+                        Step::Hopped { .. }
+                            if toad.row < check && lv.checkpoints.contains(&toad.row) =>
+                        {
+                            check = toad.row;
+                            if let Some(ch) = &mut lv.chase {
+                                ch.restart(check, now as f32 * DT);
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -312,8 +328,9 @@ mod human {
             }
             for late in [6u64, 12] {
                 let mut why = Vec::new();
-                let runs: Vec<(u32, f32)> =
-                    (0..24).map(|i| play(&lv, i * 37, late, s.time, &mut why)).collect();
+                let runs: Vec<(u32, f32)> = (0..24)
+                    .map(|i| play(&lv, i * 37, late, s.time, &mut why))
+                    .collect();
                 why.sort();
                 let mut tally: Vec<(usize, String)> = Vec::new();
                 for w in why {

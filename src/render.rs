@@ -6,7 +6,9 @@ use crate::game::{self, OPTION_ITEMS};
 use crate::game::{Game, Mode, Overlay, Phase, RACE_TO};
 use crate::input::ACTIONS;
 use crate::levels::{self, KISSES, POND, TOAD_ART, WORLDS};
-use crate::save::{BOARD_ENDLESS, BOARD_LEN, BOARD_TITLES, BOARD_TODAY, LIVES_OPTIONS, NAME_LEN, PACES};
+use crate::save::{
+    BOARD_ENDLESS, BOARD_LEN, BOARD_TITLES, BOARD_TODAY, LIVES_OPTIONS, NAME_LEN, PACES,
+};
 use crate::world::{DT, Death, Dir, Ground, Kind, Lane, Level, Role, Surface, W};
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
@@ -384,6 +386,9 @@ fn body_color(kind: Kind, seed: u32) -> Rgb {
         Kind::Hedge => (32, 92, 38),
         Kind::Bridge => (128, 92, 56),
         Kind::Stall => (196, 64, 54),
+        Kind::Wagon => (150, 100, 60),
+        Kind::ToyTank => (110, 130, 70),
+        Kind::Sleigh => (200, 50, 50),
         _ => (200, 200, 200),
     }
 }
@@ -408,6 +413,9 @@ fn solid(kind: Kind) -> bool {
             | Kind::Hedge
             | Kind::Bridge
             | Kind::Stall
+            | Kind::Wagon
+            | Kind::ToyTank
+            | Kind::Sleigh
     )
 }
 
@@ -478,6 +486,32 @@ fn detail(
                 Some(('▀', (240, 220, 120)))
             } else {
                 None
+            }
+        }
+        // Westering's covered wagon: a canvas top over two wheels
+        Kind::Wagon => {
+            if k == 1 || k + 2 == len {
+                Some(('o', (60, 40, 20)))
+            } else {
+                Some(('▀', (240, 232, 205)))
+            }
+        }
+        // a Panzer toy tank: barrel in front, turret in the middle
+        Kind::ToyTank => {
+            if k == front {
+                Some(('═', (60, 70, 40)))
+            } else if k == len / 2 {
+                Some(('■', (80, 96, 50)))
+            } else {
+                None
+            }
+        }
+        // Sleighride's big red sleigh: a golden curl in front, runners below
+        Kind::Sleigh => {
+            if k == front {
+                Some((if right { '◣' } else { '◢' }, (230, 190, 60)))
+            } else {
+                Some(('▄', (230, 190, 60)))
             }
         }
         Kind::Log => (k % 3 == 1).then_some(('═', (86, 56, 28))),
@@ -573,6 +607,22 @@ fn glyph(kind: Kind, k: usize, right: bool, surf: Surface) -> Option<(char, Rgb)
         )),
         Kind::House => Some(('⌂', (210, 130, 90))),
         Kind::Reeds => Some(('¦', (120, 160, 70))),
+        // a Marble Recovery marble, rolling
+        Kind::Marble => Some((if k.is_multiple_of(2) { '◖' } else { '◗' }, (110, 170, 250))),
+        // a uXo bomb with its fuse lit
+        Kind::Bomb => Some(if (k == 1) == right {
+            ('✶', (255, 200, 80))
+        } else {
+            ('●', (60, 60, 72))
+        }),
+        // Hammurabi's rats, out of the granary
+        Kind::Rat => Some(if (k == 1) == right {
+            (if right { '▸' } else { '◂' }, (150, 140, 130))
+        } else {
+            ('◗', (120, 110, 100))
+        }),
+        // the 1D-Pong ball
+        Kind::PongBall => Some(('●', (250, 250, 250))),
         _ => None,
     }
 }
@@ -638,10 +688,29 @@ struct Geo {
     fy0: i32,
 }
 
-fn geo(cv: &Canvas, lv: &Level) -> Geo {
+fn geo(cv: &Canvas, g: &Game) -> Geo {
+    let lv = &g.level;
     let a = cv.area;
     let fx0 = a.x as i32 + (a.width as i32 - W as i32) / 2;
     let avail = a.height as i32 - 2;
+    if lv.height() as i32 > avail {
+        // a boss road taller than the screen: the view rolls with the toad,
+        // keeping him a little below the middle, eased so it glides
+        let row = g.lead().toad.row as f32;
+        let max = (lv.height() as i32 - avail) as f32;
+        let target = (row - avail as f32 * 0.62).clamp(0.0, max);
+        let cam = g.cam.get();
+        let cam = if cam.is_nan() || (cam - target).abs() > avail as f32 {
+            target
+        } else {
+            cam + (target - cam) * 0.18
+        };
+        g.cam.set(cam);
+        return Geo {
+            fx0,
+            fy0: a.y as i32 + 1 - cam.round() as i32,
+        };
+    }
     let extra = (avail - lv.height() as i32).max(0);
     // a little ground below the start, the rest is sky
     let fy0 = a.y as i32 + 1 + extra - extra.min(2);
@@ -723,7 +792,7 @@ fn cloud(col: i32, row: i32, t: f32) -> Option<char> {
 fn field(cv: &mut Canvas, g: &Game) {
     let lv = &g.level;
     let t = g.lt as f32 * DT;
-    let gm = geo(cv, lv);
+    let gm = geo(cv, g);
     let a = cv.area;
     let (top, bottom) = (a.y as i32 + 1, a.bottom() as i32 - 1);
     let left = (a.x as i32 - gm.fx0).max(-10);
@@ -814,6 +883,27 @@ fn field(cv: &mut Canvas, g: &Game) {
     if g.night && sky_rows >= 3 {
         cv.put(gm.fx0 + 68, top + 1, '◐', (240, 240, 210), None);
     }
+    // cameos in the sky: Saalis' ship, the Tiira, crossing over the highway,
+    // and a Lunar Descent lander coming softly down over the night road
+    if sky_rows >= 3 && g.mode == Mode::Story {
+        if g.world == 1 {
+            let span = (a.width as f32) + 24.0;
+            let x = a.x as i32 - 12 + ((t % 22.0) / 22.0 * span) as i32;
+            let y = top + 1;
+            cv.text(x - 4, y, "⠒⠒⠂", (200, 210, 230), None);
+            cv.put(x, y, '#', (230, 230, 240), None);
+            cv.put(x + 1, y, '>', (255, 190, 90), None);
+        }
+        if g.night {
+            let fall = (t % 30.0) / 30.0;
+            let y = top + (fall * (sky_rows - 2) as f32) as i32;
+            let x = gm.fx0 + 12;
+            cv.put(x, y, '▲', (210, 210, 220), None);
+            if (t * 10.0) as i32 % 2 == 0 {
+                cv.put(x, y + 1, '¡', (255, 170, 60), None);
+            }
+        }
+    }
     // the lanes
     for (r, lane) in lv.rows.iter().enumerate() {
         let y = gm.fy0 + r as i32;
@@ -834,6 +924,10 @@ fn field(cv: &mut Canvas, g: &Game) {
         }
         draw_items(cv, lv, r, lane, t, gm.fx0, y, left, right);
     }
+    // a boss road's chaser, climbing from below
+    if let Some(ch) = &lv.chase {
+        draw_chase(cv, ch, lv.height(), gm.fx0, gm.fy0, top, bottom, t);
+    }
     // level-crossing lights
     for r in 0..lv.height() {
         if lv.train_coming(r, t) && (t * 4.0) as i32 % 2 == 0 {
@@ -842,6 +936,26 @@ fn field(cv: &mut Canvas, g: &Game) {
                     for col in [1, 78] {
                         cv.put(gm.fx0 + col, gm.fy0 + rr, '●', (255, 50, 40), None);
                     }
+                }
+            }
+        }
+    }
+    // the pond's goldfish, offering a wish
+    if let Some((age, x, row)) = g.goldfish {
+        let y = gm.fy0 + row as i32;
+        let sx = gm.fx0 + x.round() as i32;
+        if age < 0.4 || age > 6.0 {
+            cv.put(sx + 1, y, 'o', (170, 210, 240), None);
+        } else {
+            let tail = if (t * 6.0) as i32 % 2 == 0 { '<' } else { '«' };
+            cv.text(sx, y, &format!("{tail}°)"), (250, 150, 40), None);
+            cv.put(sx + 3, y, '>', (250, 150, 40), None);
+            if age > 3.0 {
+                // the bubble rises, then pops
+                let up = ((age - 3.0) * 2.0) as i32;
+                let ch = if age > 4.2 { '*' } else { 'o' };
+                if age < 4.6 {
+                    cv.put(sx + 4, y - 1 - up.min(2), ch, (210, 235, 250), None);
                 }
             }
         }
@@ -973,6 +1087,9 @@ fn field(cv: &mut Canvas, g: &Game) {
                 continue;
             }
             let y = gm.fy0 + r as i32;
+            if y < top || y >= bottom {
+                continue;
+            }
             for x in a.x as i32..a.right() as i32 {
                 let bg = cv.bg_at(x, y);
                 let cell = &mut cv.buf[(x as u16, y as u16)];
@@ -993,6 +1110,9 @@ fn field(cv: &mut Canvas, g: &Game) {
                 continue;
             }
             let y = gm.fy0 + r;
+            if y < top || y >= bottom {
+                continue;
+            }
             for x in a.x as i32..a.right() as i32 {
                 let cell = &mut cv.buf[(x as u16, y as u16)];
                 let fog = |rgb: Rgb| mix(rgb, (168, 172, 176), k);
@@ -1017,6 +1137,9 @@ fn field(cv: &mut Canvas, g: &Game) {
         }
         for (r, row) in light.iter().enumerate() {
             let y = gm.fy0 + r as i32;
+            if y < top || y >= bottom {
+                continue;
+            }
             for x in a.x as i32..a.right() as i32 {
                 let col = x - gm.fx0;
                 let mut l = if (-10..90).contains(&col) {
@@ -1085,6 +1208,109 @@ fn field(cv: &mut Canvas, g: &Game) {
             let k = if g.night { 0.3 } else { 0.85 };
             cell.bg = cell.bg.map(|b| scale(b, k));
             cv.put(x, y, cell.ch, scale(cell.fg, k), cell.bg);
+        }
+    }
+}
+
+/// The chaser on a boss road: everything at and below its front.
+#[allow(clippy::too_many_arguments)]
+fn draw_chase(
+    cv: &mut Canvas,
+    ch: &crate::world::Chase,
+    height: usize,
+    fx0: i32,
+    fy0: i32,
+    top: i32,
+    bottom: i32,
+    t: f32,
+) {
+    use crate::world::ChaseKind;
+    let line = ch.line(t);
+    let front = (line - 0.5).ceil() as i32;
+    let x0 = cv.area.x as i32;
+    let x1 = cv.area.right() as i32;
+    for r in front.max(0)..(height as i32 + 3) {
+        let y = fy0 + r;
+        if y < top || y >= bottom {
+            continue;
+        }
+        let depth = r - front;
+        for x in x0..x1 {
+            let col = x - fx0;
+            let h = hash(col, r);
+            let (chr, fg, bg) = match ch.kind {
+                ChaseKind::Roller => {
+                    if depth == 0 {
+                        (
+                            if (col + (t * 8.0) as i32) % 3 == 0 {
+                                '▒'
+                            } else {
+                                '▓'
+                            },
+                            (150, 150, 158),
+                            (70, 70, 76),
+                        )
+                    } else {
+                        ('▁', (70, 70, 74), (44, 44, 48))
+                    }
+                }
+                ChaseKind::Flood => {
+                    let wave = ((col as f32 * 0.4 + t * 5.0 + r as f32).sin() > 0.3) as u8;
+                    (
+                        if depth == 0 && wave == 1 { '≈' } else { '~' },
+                        (170, 210, 245),
+                        if depth == 0 {
+                            (60, 110, 190)
+                        } else {
+                            (40, 80, 150)
+                        },
+                    )
+                }
+                ChaseKind::Crows => {
+                    let flap = (t * 8.0) as u32 + h;
+                    let bird = if depth <= 1 { h % 4 == 0 } else { h % 9 == 0 };
+                    (
+                        if bird {
+                            if flap % 2 == 0 { 'v' } else { '^' }
+                        } else {
+                            ' '
+                        },
+                        (20, 20, 26),
+                        (36, 38, 58),
+                    )
+                }
+                ChaseKind::Dragon => {
+                    let flick = (t * 12.0) as u32 + h;
+                    (
+                        if depth == 0 {
+                            ['▲', '^', '▴'][(flick % 3) as usize]
+                        } else {
+                            ['░', '▒'][(flick % 2) as usize]
+                        },
+                        if depth == 0 {
+                            (255, 200, 60)
+                        } else {
+                            (240, 110, 40)
+                        },
+                        if depth == 0 {
+                            (200, 60, 30)
+                        } else {
+                            (120, 30, 20)
+                        },
+                    )
+                }
+            };
+            cv.put(x, y, chr, fg, Some(bg));
+        }
+        if depth == 0 {
+            let name = match ch.kind {
+                ChaseKind::Roller => " STEAMROLLER ",
+                ChaseKind::Flood => " THE THAW ",
+                ChaseKind::Crows => " CROWS ",
+                ChaseKind::Dragon => " THE DRAGON ",
+            };
+            let nx = fx0 + 40 - name.chars().count() as i32 / 2;
+            cv.text(nx, y, name, (255, 240, 200), Some((30, 20, 20)));
         }
     }
 }
@@ -1744,6 +1970,8 @@ fn world_card(cv: &mut Canvas, g: &Game) {
                 ('●', TOAD1)
             } else if i == POND {
                 ('w', GOLD)
+            } else if levels::story()[i].boss.is_some() && i > g.level_no {
+                ('♦', (200, 120, 80))
             } else if i < g.level_no {
                 ('♥', (230, 100, 130))
             } else {
@@ -1753,8 +1981,34 @@ fn world_card(cv: &mut Canvas, g: &Game) {
         }
     }
     let y = inner.y as i32;
-    cv.centre(y + 1, w.name, GOLD, None);
-    cv.centre(y + 2, w.tagline, TEXT, None);
+    if let Some((tagline, _, k)) = g.boss {
+        cv.centre(
+            y + 1,
+            &format!("BOSS ROAD: {}", g.name.to_uppercase()),
+            (255, 150, 90),
+            None,
+        );
+        for (i, line) in wrap(tagline, inner.width as usize - 4)
+            .iter()
+            .take(2)
+            .enumerate()
+        {
+            cv.centre(y + 2 + i as i32, line, TEXT, None);
+        }
+        let best = g.save.boss_records.get(k).copied().unwrap_or(0);
+        let note = if best > 0 {
+            format!(
+                "A long climb, with resting banks. Best: {}",
+                crate::save::tenths(best)
+            )
+        } else {
+            "A long climb, with resting banks on the way.".to_string()
+        };
+        cv.centre(y + 4, &note, DIM, None);
+    } else {
+        cv.centre(y + 1, w.name, GOLD, None);
+        cv.centre(y + 2, w.tagline, TEXT, None);
+    }
     if pond {
         cv.centre(
             y + 4,
@@ -1768,7 +2022,7 @@ fn world_card(cv: &mut Canvas, g: &Game) {
             TOAD1,
             None,
         );
-    } else {
+    } else if g.boss.is_none() {
         cv.centre(
             y + 4,
             &format!("Crossing {}: {}", g.level_no + 1, g.name),
@@ -1815,7 +2069,7 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
     let kissed = t > 1.3;
     let shake = match g.kiss {
         // the cactus and the duchess shake the scene
-        4 | 16 if kissed && after < 0.8 => {
+        4 | 19 if kissed && after < 0.8 => {
             if (t * 30.0) as i32 % 2 == 0 {
                 1
             } else {
@@ -1826,10 +2080,10 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
     };
     let art_colour = match g.kiss {
         // the lamppost flickers
-        12 if kissed && after < 1.0 && (t * 14.0) as i32 % 3 == 0 => (60, 60, 50),
+        14 if kissed && after < 1.0 && (t * 14.0) as i32 % 3 == 0 => (60, 60, 50),
         _ => kiss.color,
     };
-    let moon_splashed = g.kiss == 13 && kissed;
+    let moon_splashed = g.kiss == 15 && kissed;
     for (i, line) in kiss.art.iter().enumerate() {
         let y = ground - oh + 1 + i as i32;
         if moon_splashed && i < 3 {
@@ -1856,13 +2110,13 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
         // the cow licks him clean: he shines
         2 if kissed => colour = mix(TOAD1, (230, 250, 255), (after * 2.0).min(0.6)),
         // the rubber duck squeaks and he jumps
-        7 if kissed && after < 0.6 => {
+        8 if kissed && after < 0.6 => {
             hop = (3.0 * (after / 0.6 * std::f32::consts::PI).sin()) as i32
         }
-        // the heron, the dragon: he leaves, quickly
-        8 | 17 if after > 2.2 => tx -= ((after - 2.2) * 30.0) as i32,
-        // stuck to the icicle: he shivers
-        10 if kissed => tx += if (t * 20.0) as i32 % 2 == 0 { 1 } else { 0 },
+        // the heron, the dragon, the bomb: he leaves, quickly
+        9 | 20 | 21 if after > 2.2 => tx -= ((after - 2.2) * 30.0) as i32,
+        // stuck to the icicle or the sleigh's runner: he shivers
+        11 | 13 if kissed => tx += if (t * 20.0) as i32 % 2 == 0 { 1 } else { 0 },
         _ => {}
     }
     for (i, line) in TOAD_ART.iter().enumerate() {
@@ -1894,14 +2148,34 @@ fn kiss_scene(cv: &mut Canvas, g: &Game) {
                 }
             }
         }
+        // the toy tank fires a cork
+        6 if kissed && after < 1.6 => {
+            let cx = ox + 14 + (after * 18.0) as i32;
+            let cy = ground - 3 - (after * 3.0 - after * after * 2.0) as i32;
+            cv.put(cx, cy, '●', (200, 160, 110), None);
+        }
+        // the bomb's fuse fizzles out
+        21 if kissed && after < 1.2 => {
+            cv.put(
+                ox + 7,
+                ground - 6,
+                if (t * 16.0) as i32 % 2 == 0 {
+                    '·'
+                } else {
+                    '˙'
+                },
+                (200, 200, 200),
+                None,
+            );
+        }
         // the duchess screams
-        16 if kissed && after < 2.5 => {
+        19 if kissed && after < 2.5 => {
             let s = "A A A A H !";
             let n = ((after * 12.0) as usize).min(s.len());
             cv.text(ox - 4 + shake, ground - 7, &s[..n], (250, 110, 200), None);
         }
         // the dragon breathes smoke in its sleep
-        17 if kissed => {
+        20 if kissed => {
             for j in 0..4 {
                 let rise = ((after * 3.0) as i32 + j) % 5;
                 cv.put(
@@ -2189,14 +2463,24 @@ fn scores(cv: &mut Canvas, g: &Game, b: usize) {
             .iter()
             .zip(g.save.records.iter())
             .map(|(n, &r)| {
-                let t = if r > 0 { crate::save::tenths(r) } else { "not yet".into() };
+                let t = if r > 0 {
+                    crate::save::tenths(r)
+                } else {
+                    "not yet".into()
+                };
                 format!("{n:<8}{t:<9}")
             })
             .collect();
         let yy = inner.bottom() as i32 - 4;
         cv.text(x, yy, "Records", GOLD, None);
         for (k, chunk) in recs.chunks(3).enumerate() {
-            cv.text(x + 9, yy + k as i32, &chunk.join("  "), (150, 175, 140), None);
+            cv.text(
+                x + 9,
+                yy + k as i32,
+                &chunk.join("  "),
+                (150, 175, 140),
+                None,
+            );
         }
     }
     cv.text(
@@ -2322,7 +2606,7 @@ fn pause(cv: &mut Canvas, g: &Game) {
 
 fn help(cv: &mut Canvas, g: &Game) {
     cv.dim(0.5);
-    let inner = cv.panel(64, 21, "Controls");
+    let inner = cv.panel(64, 23, "Controls");
     let mine: Vec<String> = (0..4).map(|i| g.key_for(i).to_uppercase()).collect();
     let hop = format!("{}, or the arrows", mine.join(" "));
     let lines = [
@@ -2337,12 +2621,16 @@ fn help(cv: &mut Canvas, g: &Game) {
         ("Two players", "one: W A S D, two: arrows"),
         ("Own keys", "Options on the title, then Keys"),
         ("Gamepad", "d-pad or stick hops, A on, Start pause"),
-        ("", ""),
         ("Roads", "do not touch anything that moves"),
         ("Water", "stay on logs, floes and barrels"),
         ("Turtles", "and ducks dive now and then"),
         ("Ice", "a hop onto ice slides one more"),
         ("Lily pads", "sink a moment after you land"),
+        ("Boss roads", "climb ahead of it; banks save your place"),
+        ("Cameos", "Westering, Panzer, Sleighride, Saalis,"),
+        ("", "Lunar Descent, Marble Recovery, uXo,"),
+        ("", "Hammurabi (BCG Games), 1D-Pong, and the"),
+        ("", "goldfish, after Ondřej Žára's Goldfish"),
     ];
     for (i, (k, v)) in lines.iter().enumerate() {
         let y = inner.y as i32 + 1 + i as i32;

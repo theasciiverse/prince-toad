@@ -5,7 +5,7 @@
 //! pattern where each run of a letter is one thing (see `world::Kind::from_char`;
 //! `.` is empty). Patterns shorter than 100 repeat.
 
-use crate::world::{Ground, Kind, Lane, Level};
+use crate::world::{Chase, ChaseKind, Ground, Kind, Lane, Level};
 
 pub struct World {
     pub name: &'static str,
@@ -53,6 +53,18 @@ pub struct Kiss {
     pub text: &'static str,
 }
 
+/// What makes a boss road: a long climb, a chaser behind, and resting banks
+/// (bank rows inside the road) where a lost life starts again.
+pub struct Boss {
+    /// The line on its card.
+    pub tagline: &'static str,
+    pub chase: ChaseKind,
+    /// Rows a second.
+    pub speed: f32,
+    /// Seconds of grace at the start and after each resting bank.
+    pub delay: f32,
+}
+
 pub struct Spec {
     pub name: &'static str,
     pub world: usize,
@@ -62,6 +74,7 @@ pub struct Spec {
     pub night: bool,
     /// Rain: a hop onto a wet road slides one further.
     pub rain: bool,
+    pub boss: Option<Boss>,
     pub rows: Vec<(Ground, f32, f32, &'static str)>,
 }
 
@@ -76,6 +89,15 @@ impl Spec {
             pond,
         );
         level.rain = self.rain;
+        if let Some(b) = &self.boss {
+            level.chase = Some(Chase {
+                kind: b.chase,
+                speed: b.speed,
+                delay: b.delay,
+                from: (level.height() - 1) as f32,
+                t0: 0.0,
+            });
+        }
         level
     }
 }
@@ -89,7 +111,7 @@ fn skid(g: &str, speed: f32, wobble: f32, p: &'static str) -> (Ground, f32, f32,
     (Ground::parse(g), speed, wobble, p)
 }
 
-pub const POND: usize = 18;
+pub const POND: usize = 22;
 
 #[rustfmt::skip]
 pub fn story() -> Vec<Spec> {
@@ -102,6 +124,7 @@ pub fn story() -> Vec<Spec> {
             kiss: 0,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "...T.......y..........T........y......T.....y......."),
                 r("grass", 0.0, "..y..........T...........y............y.....T......"),
@@ -119,6 +142,7 @@ pub fn story() -> Vec<Spec> {
             kiss: 1,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "....H.......y.........T.........y.......H......y..."),
                 r("dirt", -3.0, "kkkkk.............kkkkk................kkkkk......"),
@@ -136,6 +160,7 @@ pub fn story() -> Vec<Spec> {
             kiss: 2,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "..T......y.....T..........y..........T.....y......"),
                 r("dirt", 3.0, "kkkkk.............kkkkk...........kkkkk..........."),
@@ -156,6 +181,7 @@ pub fn story() -> Vec<Spec> {
             kiss: 3,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "....^..........^..................^.........^....."),
                 r("road", -5.0, "cccc...........cccc.................cccc.........."),
@@ -175,6 +201,7 @@ pub fn story() -> Vec<Spec> {
             kiss: 4,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, ".^........^.........o......^..........o.....^....."),
                 r("sand", 0.0, "....^...........o..........^..............^......."),
@@ -197,6 +224,7 @@ pub fn story() -> Vec<Spec> {
             kiss: 5,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "....H.......T.........H.........T.......H......T..."),
                 r("road", 8.0, "cccc.........cccc...........cccc.................."),
@@ -211,14 +239,59 @@ pub fn story() -> Vec<Spec> {
                 r("grass", 0.0, "........y.........................y..............."),
             ],
         },
+        Spec {
+            name: "The Long Haul",
+            world: 1,
+            time: 75.0,
+            kiss: 6,
+            night: false,
+            rain: false,
+            boss: Some(Boss {
+                tagline: "A runaway steamroller, and three roads to stay ahead of it.",
+                chase: ChaseKind::Roller,
+                speed: 0.6,
+                delay: 4.0,
+            }),
+            rows: vec![
+                r("bank", 0.0, "....^..........^..................^.........^....."),
+                r("sand", 0.0, "....^...........o..........^..............^......."),
+                r("rail", -24.0, "RRRRRRRRRRRRRRRRRRRRRRRR............................................................................"),
+                r("sand", 0.0, "..........o..................^..........o........."),
+                r("road", 7.0, "PPP.........................PPP..................."),
+                r("road", -7.5, "tttttttt....................tttttttt................"),
+                r("road", 10.0, "mm...............................mm..............."),
+                r("sand", 0.0, "..o.........^.............o.........^.........o..."),
+                r("road", -6.0, "cccc.......cccc...........cccc...................."),
+                r("road", 5.0, "PPP................PPP..........................."),
+                r("bank", 0.0, "..y.........y..........y.........y..........y......"),
+                r("road", 7.0, "cccc.........cccc...........cccc.................."),
+                r("road", -6.0, "tttttttt.............cccc.............cccc........"),
+                r("road", 9.0, "mm.............cccc.........................mm...."),
+                r("grass", 0.0, "....y.................y.....................y....."),
+                r("road", 6.0, "tttttttttt.................cccc...................."),
+                r("road", -10.0, "cccc.....................................cccc....."),
+                r("road", 5.5, "....cccc..............cccc..............cccc......"),
+                r("bank", 0.0, "....y.........y..........y........y..........y...."),
+                r("dirt", 2.5, "WWWWW..................WWWWW....................."),
+                r("dirt", -3.5, "bb...........bb..............bb.................."),
+                r("grass", 0.0, "........y.......................y.........y......."),
+                r("dirt", 3.0, "..WWWWW.......................WWWWW..............."),
+                r("dirt", -2.0, "gg..gg.................gg..gg..gg................"),
+                r("grass", 0.0, "..y.........................y......................"),
+                r("dirt", 4.0, "rrrr.....................rrrr....................."),
+                r("dirt", -3.0, "kkkkk.............kkkkk................kkkkk......"),
+                r("grass", 0.0, "..........y...............................y........"),
+            ],
+        },
         // ---- the river ----
         Spec {
             name: "Willow Ford",
             world: 2,
             time: 32.0,
-            kiss: 6,
+            kiss: 7,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "..T....v.......T.......vv.......T.....v......T....."),
                 r("water", 2.0, "llllllllll..........llllllllll.........llllllll...."),
@@ -234,9 +307,10 @@ pub fn story() -> Vec<Spec> {
             name: "Reed Bend",
             world: 2,
             time: 34.0,
-            kiss: 7,
+            kiss: 8,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "v.v...T......vvv......T.........vv.....T....v.v..."),
                 r("water", -3.0, "UUUUUU.......uuuuuu.........UUUUUU.........uuuuuu..."),
@@ -254,9 +328,10 @@ pub fn story() -> Vec<Spec> {
             name: "Heron Rapids",
             world: 2,
             time: 36.0,
-            kiss: 8,
+            kiss: 9,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "..vv....T.......v.v.......T.....vv......T...v....."),
                 r("water", 4.5, "llllllll.............lllllll..............llllll...."),
@@ -276,9 +351,10 @@ pub fn story() -> Vec<Spec> {
             name: "First Snow",
             world: 3,
             time: 32.0,
-            kiss: 9,
+            kiss: 10,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "..T.........T..........T.........T.........T......"),
                 r("snow", 0.0, "....o.................T.................o........."),
@@ -295,9 +371,10 @@ pub fn story() -> Vec<Spec> {
             name: "The Frozen Well",
             world: 3,
             time: 34.0,
-            kiss: 10,
+            kiss: 11,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "....T.........o.........T.........o.........T....."),
                 r("water", 2.0, "iiiiiiii..........IIIIII..........iiiiiiii.........."),
@@ -315,9 +392,10 @@ pub fn story() -> Vec<Spec> {
             name: "Mitten Pass",
             world: 3,
             time: 38.0,
-            kiss: 11,
+            kiss: 12,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "..T....T.........T....T.........T....T.......T...."),
                 r("snow", -6.0, "zz........zz.......................zz............."),
@@ -333,14 +411,54 @@ pub fn story() -> Vec<Spec> {
                 r("snow", 0.0, "...o......................................o......."),
             ],
         },
+        Spec {
+            name: "The Thaw",
+            world: 3,
+            time: 70.0,
+            kiss: 13,
+            night: false,
+            rain: false,
+            boss: Some(Boss {
+                tagline: "The snow is melting, and the meltwater is coming down the hill behind him.",
+                chase: ChaseKind::Flood,
+                speed: 0.6,
+                delay: 4.0,
+            }),
+            rows: vec![
+                r("bank", 0.0, "..y.......y.........y........y.........y........."),
+                r("snow", -6.0, "zz........zz.......................zz............."),
+                r("ice", 0.0, ""),
+                r("snow", 4.0, "SSSS....................SSSS......................"),
+                r("snow", 0.0, "....o.................o................o........."),
+                skid("snow", -5.0, 2.5, "cccc...............cccc..............cccc........."),
+                r("ice", 0.0, ""),
+                r("snow", 5.0, "SSSS..............SSSS............................"),
+                r("bank", 0.0, "....y..........y.........y..........y.........y..."),
+                r("water", 2.0, "iiiiiiii..........IIIIII..........iiiiiiii.........."),
+                r("water", -2.5, "IIIIII..........iiiiiiii..........IIIIII............"),
+                r("water", 3.0, "iiiiiiiiii...............iiiiii...................."),
+                r("snow", 0.0, "....T...................o.................T......."),
+                r("water", -3.0, "IIIIIII.........iiiiii..........IIIIIII............"),
+                r("water", 2.5, "iiiiiiiiii..............iiiiiiii..................."),
+                r("bank", 0.0, "..y..........y.........y..........y........y......."),
+                r("snow", -4.0, "zz..............zz................zz.............."),
+                r("ice", 0.0, ""),
+                r("snow", 5.0, "ssssssssss...............................ssssssssss"),
+                r("snow", 0.0, "..T...........................T...................."),
+                skid("snow", -3.0, 2.0, "cccc...........cccc...................cccc........"),
+                r("ice", 0.0, ""),
+                r("snow", 0.0, "........o.........................o..............."),
+            ],
+        },
         // ---- night ----
         Spec {
             name: "Lamplight Lane",
             world: 4,
             time: 32.0,
-            kiss: 12,
+            kiss: 14,
             night: true,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "....T.........*.........T.........*.........T....."),
                 r("road", -6.0, "cccc...............cccc.................cccc......"),
@@ -355,9 +473,10 @@ pub fn story() -> Vec<Spec> {
             name: "Moon Puddle",
             world: 4,
             time: 34.0,
-            kiss: 13,
+            kiss: 15,
             night: true,
             rain: true,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "..vv.....*.........vvv.........*........vv........"),
                 r("water", 2.5, "llllllllll............llllllll..........lllllll...."),
@@ -374,9 +493,10 @@ pub fn story() -> Vec<Spec> {
             name: "Crow Field",
             world: 4,
             time: 38.0,
-            kiss: 14,
+            kiss: 16,
             night: true,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "..y..T......y.....T..*...y.....T......y....T...y.."),
                 r("dirt", 4.0, "rrrr.....................rrrr......................"),
@@ -392,14 +512,52 @@ pub fn story() -> Vec<Spec> {
                 r("grass", 0.0, "....y...........................y................."),
             ],
         },
+        Spec {
+            name: "The Long Night",
+            world: 4,
+            time: 70.0,
+            kiss: 17,
+            night: true,
+            rain: false,
+            boss: Some(Boss {
+                tagline: "The crows have had enough of being laughed at. They are coming.",
+                chase: ChaseKind::Crows,
+                speed: 0.6,
+                delay: 4.0,
+            }),
+            rows: vec![
+                r("bank", 0.0, "..y..*......y.....*....y.....*......y....*...y...."),
+                r("road", -9.0, "cccc......................cccc...................."),
+                r("road", 14.0, "e......................................................."),
+                r("grass", 0.0, "....*......................*......................"),
+                r("road", 6.0, "tttttttt.............cccc.........................."),
+                r("road", -10.0, "cccc................................cccc.........."),
+                r("bank", 0.0, "....y.........y..........y........y..........y...."),
+                r("water", 2.5, "llllllllll............llllllll..........lllllll...."),
+                r("water", -3.0, "UUUUUU..........uuuuuu............UUUUUU............"),
+                r("water", 3.5, "llllllll.................lllllll.................."),
+                r("grass", 0.0, "....*....#####............#####.........*........."),
+                r("road", 6.0, "OO..............OO.................OO............."),
+                r("road", -8.0, "cccc.............cccc............................."),
+                r("bank", 0.0, "..y..........y.........y..........y........y......."),
+                r("dirt", 4.0, "rrrr.....................rrrr......................"),
+                r("road", -6.0, "tttttttt...................cccc...................."),
+                r("road", 11.0, "mm..................................mm............."),
+                r("grass", 0.0, "........*..........................*.............."),
+                r("dirt", 3.0, "kkkkk...................kkkkk......................"),
+                r("road", -12.0, "e......................................................."),
+                r("grass", 0.0, "....y...........................y................."),
+            ],
+        },
         // ---- the castle ----
         Spec {
             name: "The Courtyard",
             world: 5,
             time: 32.0,
-            kiss: 15,
+            kiss: 18,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "#####...#####...#####...#####...#####...#####......"),
                 r("cobble", -3.0, "w.....w.....w..............w.....w.....w..........."),
@@ -415,9 +573,10 @@ pub fn story() -> Vec<Spec> {
             name: "The Moat",
             world: 5,
             time: 36.0,
-            kiss: 16,
+            kiss: 19,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "y...y...y...y...y...y...y...y...y...y...y...y...y."),
                 r("moat", 0.0, "..........==========..............................==========...................."),
@@ -436,9 +595,10 @@ pub fn story() -> Vec<Spec> {
             name: "The Dragon's Doorstep",
             world: 5,
             time: 40.0,
-            kiss: 17,
+            kiss: 20,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "....o.............o..............o.............o.."),
                 r("cobble", 12.0, "fff..........................................."),
@@ -453,14 +613,53 @@ pub fn story() -> Vec<Spec> {
                 r("cobble", 0.0, "........o..........................o............."),
             ],
         },
+        Spec {
+            name: "The Dragon Wakes",
+            world: 5,
+            time: 80.0,
+            kiss: 21,
+            night: false,
+            rain: false,
+            boss: Some(Boss {
+                tagline: "Somebody kissed the dragon. Now it is awake, and it is following him up the stairs.",
+                chase: ChaseKind::Dragon,
+                speed: 0.65,
+                delay: 4.0,
+            }),
+            rows: vec![
+                r("bank", 0.0, "....o.............o..............o.............o.."),
+                r("cobble", 12.0, "fff..........................................."),
+                r("cobble", -5.0, "BB.........BB.................BB.............BB...."),
+                r("moat", 3.0, "xxx......xxxx...........xxx...........xxxx........."),
+                r("moat", -3.5, "DDDD..........DDDD...........dddd..........DDDD...."),
+                r("cobble", -13.0, "ffff..........................................."),
+                r("cobble", 6.0, "aaaaaa............h...........aaaaaa........h......"),
+                r("bank", 0.0, "....y.........y..........y........y..........y...."),
+                r("dirt", 5.0, "QQ.......QQ..............QQ.........QQ............."),
+                r("dirt", -4.0, "QQ.............QQ..........QQ......................"),
+                r("cobble", 0.0, "#####.........o.......#####.........o.......#####."),
+                r("cobble", 8.0, "h.........h.......................h..............."),
+                r("cobble", -4.0, "BB..............BB...............BB..............."),
+                r("dirt", 6.0, "QQ..............QQ....................QQ.........."),
+                r("bank", 0.0, "..y..........y.........y..........y........y......."),
+                r("cobble", -3.0, "w.....w.....w..............w.....w.....w..........."),
+                r("cobble", 8.0, "h..............h.........................h........"),
+                r("cobble", -5.0, "aaaaaa................aaaaaa........................"),
+                r("grass", 0.0, "....y.........y..........y..........y.........y..."),
+                r("moat", 2.0, "xxx.....xxx...........xxx.......xxx..............."),
+                r("moat", -2.0, "dddd..........dddd............dddd................."),
+                r("cobble", 0.0, ".........o......................o................."),
+            ],
+        },
         // ---- the pond ----
         Spec {
             name: "The Quiet Pond",
             world: 6,
             time: 0.0,
-            kiss: 18,
+            kiss: 22,
             night: false,
             rain: false,
+            boss: None,
             rows: vec![
                 r("bank", 0.0, "v.vv..v...vvv..v.v...v..vv.v...vvv...v.v..vv...v.v"),
                 r("pond", 0.0, "....ppp......pp.......ppp.......pp.......ppp......."),
@@ -479,7 +678,7 @@ pub fn story() -> Vec<Spec> {
 }
 
 #[rustfmt::skip]
-pub const KISSES: [Kiss; 19] = [
+pub const KISSES: [Kiss; 23] = [
     Kiss {
         name: "a mailbox",
         mark: "▆▖",
@@ -557,6 +756,18 @@ pub const KISSES: [Kiss; 19] = [
         text: "He kisses a traffic cone in a lovely orange dress. It does not say a word. A very good listener, though.",
     },
     Kiss {
+        name: "a toy tank",
+        mark: "▄█▄",
+        color: (110, 130, 70),
+        art: &[
+            r"     __",
+            r"  __|==|=====o",
+            r" |  TOY  |",
+            r" (o)(o)(o)(o)",
+        ],
+        text: "A little toy tank waits at the top, turret turning. He kisses the hatch. It fires a cork, and he lands on his back, looking at the sky.",
+    },
+    Kiss {
         name: "a fish",
         mark: "◀◆",
         color: (120, 190, 230),
@@ -626,6 +837,18 @@ pub const KISSES: [Kiss; 19] = [
         text: "He kisses a lost red mitten. It is warm inside. For one moment he thinks about staying.",
     },
     Kiss {
+        name: "a sleigh",
+        mark: "▟▙",
+        color: (200, 50, 50),
+        art: &[
+            r"  ____________",
+            r" /|  SLEIGH  |\",
+            r" \|__________|/",
+            r"  ============",
+        ],
+        text: "A big red sleigh waits on the last of the snow. He kisses its runner. His lips stick fast. He waits for the sun.",
+    },
+    Kiss {
         name: "a lamppost",
         mark: "¡",
         color: (250, 230, 150),
@@ -659,6 +882,19 @@ pub const KISSES: [Kiss; 19] = [
             r"    | |",
         ],
         text: "He kisses the scarecrow. The two crows on its arms laugh at him all the way to the castle.",
+    },
+    Kiss {
+        name: "a lunar lander",
+        mark: "▲",
+        color: (200, 200, 210),
+        art: &[
+            r"    _/^\_",
+            r"   |  O  |",
+            r"   |_____|",
+            r"   /  |  \",
+            r"  /   |   \",
+        ],
+        text: "A little lander has come down in the field, softly. He kisses its leg. The engine coughs once. The moon looks a little closer.",
     },
     Kiss {
         name: "a princess statue",
@@ -701,6 +937,20 @@ pub const KISSES: [Kiss; 19] = [
         text: "He kisses the sleeping dragon on the nose. It smiles in its sleep and mumbles five more minutes. Smoke curls out. He does not wait.",
     },
     Kiss {
+        name: "a bomb",
+        mark: "●",
+        color: (70, 70, 80),
+        art: &[
+            r"       *",
+            r"      /",
+            r"   .-'-.",
+            r"  /     \",
+            r"  \     /",
+            r"   '---'",
+        ],
+        text: "Something round and black sits at the top, its fuse fizzing. He kisses it. The fuse goes out. The bravest thing he ever did.",
+    },
+    Kiss {
         name: "the princess",
         mark: "▙▟",
         color: (150, 220, 120),
@@ -717,6 +967,29 @@ pub const KISSES: [Kiss; 19] = [
 
 /// The prince as a toad, for the scenes.
 /// A line for whatever flattened him, now and then a different one.
+/// What to say when a boss road's chaser catches him.
+pub fn caught_by(kind: ChaseKind, n: u32) -> &'static str {
+    let lines: &[&str] = match kind {
+        ChaseKind::Roller => &[
+            "The steamroller. Very, very flat.",
+            "Rolled out like pastry. Back to the last bank.",
+        ],
+        ChaseKind::Flood => &[
+            "The meltwater caught him. Washed all the way back down.",
+            "Swept away by the thaw. Spring is rough.",
+        ],
+        ChaseKind::Crows => &[
+            "The crows caught him. They only wanted to talk. Loudly.",
+            "Carried off by crows, then dropped. Rude.",
+        ],
+        ChaseKind::Dragon => &[
+            "Singed! The dragon catches up.",
+            "Warm. Too warm. Back down the stairs.",
+        ],
+    };
+    lines[n as usize % lines.len()]
+}
+
 pub fn squashed_by(kind: Kind, n: u32) -> &'static str {
     let lines: &[&str] = match kind {
         Kind::Goose => &[
@@ -764,25 +1037,29 @@ pub fn squashed_by(kind: Kind, n: u32) -> &'static str {
 }
 
 /// The last word on each kiss, after its story: one per story kiss.
-pub const VERDICTS: [&str; 18] = [
+pub const VERDICTS: [&str; 22] = [
     "Still a toad.",
     "Still a toad. The gnome is still a gnome.",
     "He sparkles. It is only cow spit.",
     "Still a toad. Now he wants pancakes.",
     "Still a toad. A slightly prickly one.",
     "Still a toad. The cone will keep his secret.",
+    "Still a toad. Toy tanks, real ricochets.",
     "Still a toad. Every fish in the river knows.",
     "Still a toad. Squeak.",
     "Still a toad. Still in one piece, which is something.",
     "Still a toad. A colder one.",
     "Still a toad. Thawed, at least.",
     "Still a toad. Warm feet, though.",
+    "Still a toad. No joyride today.",
     "Still a toad. Lit up, for a second.",
     "Still a toad. A wet one.",
     "Still a toad. The crows are still laughing.",
+    "Still a toad. A soft landing, at least.",
     "Still a toad. The pigeons are not impressed.",
     "Still a toad. Her ears will ring until Tuesday.",
     "Still a toad. Not toast, though!",
+    "Still a toad. Unexploded, like the bomb.",
 ];
 
 pub const TOAD_ART: &[&str] = &[r"  (o) (o)", r" (  ___  )", r"  \_   _/", r"  /_\ /_\"];
@@ -818,8 +1095,10 @@ mod tests {
         assert_eq!(all.len(), POND + 1);
         for (n, s) in all.iter().enumerate() {
             let lv = s.build();
+            // a boss road is a long climb under a rolling view; the others fit the screen
+            let most = if s.boss.is_some() { 40 } else { 22 };
             assert!(
-                lv.height() >= 5 && lv.height() <= 22,
+                lv.height() >= 5 && lv.height() <= most,
                 "{}: {} rows",
                 s.name,
                 lv.height()

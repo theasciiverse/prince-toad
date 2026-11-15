@@ -145,6 +145,27 @@ with the plain word; nothing found by web search so far.
 - Tests `the_pond_is_played_to_the_finale_and_the_title` and
   `the_endless_road_keeps_a_record_per_world`.
 
+## 1.1 (2026-11-15)
+
+- **Boss roads:** `levels::Boss` on a `Spec` (tagline, `ChaseKind`,
+  speed, delay); levels up to 40 rows. `world::Chase` is a line that
+  rises from the bottom at `speed` rows a second after `delay`; the toad
+  is `Death::Caught` when he is at or below it (`Toad::tick`). Bank rows
+  inside a level are `Level::checkpoints`; hopping onto one sets
+  `Player.check`, restarts the chase below it and tops up the clock.
+  `render::geo` scrolls tall levels with an eased camera (`Game.cam`).
+  `Save::boss_records`, set at the normal pace only.
+- **Story order:** the bosses are `levels::story()` indices 6, 13, 17 and
+  21 (crossings 7, 14, 18 and 22 on `--crossing`); kiss index equals story
+  index (`every_level_is_sound`), `POND` is 22. `save.rs` writes `story=2`; an older save is moved on by
+  `BOSSES_BEFORE_OLD`.
+- **Cameos** (David's go-ahead, 2026-11-15): Asciiverse's own titles only
+  (Westering, Panzer, Sleighride, Saalis, Lunar Descent, Marble Recovery,
+  uXo, Hammurabi by BCG Games, 1D-Pong), drawn in Prince Toad's style;
+  nothing from other authors' games without asking David. The one
+  exception he asked for: the goldfish in the pond, after Ondřej Žára's
+  Goldfish, our own drawing and words (`Game::goldfish_tick`).
+
 ## How it works
 
 - `world.rs`: lanes are one row each. Everything on a lane moves together
@@ -179,7 +200,7 @@ command, never the real save. Tests never see a state folder
 systemd-run --user --scope -p MemoryMax=4G cargo build --release -j4
 systemd-run --user --scope -p MemoryMax=4G cargo test -j4
 target/release/prince-toad                 # title
-target/release/prince-toad --crossing 19   # straight to the pond
+target/release/prince-toad --crossing 23   # straight to the pond
 target/release/prince-toad --demo --crossing 7
 asciiverse/record-preview.sh               # the 100x30 catalog cast
 ```

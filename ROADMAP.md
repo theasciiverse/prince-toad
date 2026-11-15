@@ -47,6 +47,27 @@ tag 1.0.0 once a game is thoroughly played and tuned:
 - **Endless:** a record per world, the quickest crossing, kept at the
   normal pace.
 
+## 1.1.0 (2026-11-15)
+
+- **Boss roads:** four tall crossings set between the worlds, 21 to 28
+  rows against 9 to 13 for a normal road, with a camera that rolls up
+  after the toad, a chase from below (steamroller, flood, crows, the
+  dragon) that starts after a short grace and climbs at 0.6 to 0.65 rows
+  a second, and one or two resting banks that become the respawn point.
+  The Long Haul (after the Village Lanes), The Thaw (after Mitten Pass),
+  The Long Night (after Crow Field), The Dragon Wakes (after the
+  Doorstep, before the pond). Kisses 23, verdicts 22.
+- **Tuned** with `solver::human` (eye 6 and 12 ticks late, 24 tries):
+  deaths per try 1.4/2.4 on The Long Haul, 0.7/1.3 on The Thaw, 1.3/2.1
+  on The Long Night, 1.6/4.0 on The Dragon Wakes, all crossed in 12 to
+  21 seconds of 70 to 80. The Dragon Wakes' first moat was eased after
+  it caused most deaths. Chases first ran at 0.45 and never caught
+  anyone; 0.6 makes them felt.
+- **Cameos** from Asciiverse's own games, and the goldfish after Ondřej
+  Žára's Goldfish (David, 2026-11-15).
+- **Save:** `story=2` marks the new numbering; an older save is moved
+  past the boss roads it had already passed.
+
 ## Still to come
 
 - **David's own play-through** by hand. Speeds, gaps, clocks, the pond's

@@ -113,6 +113,21 @@ pub enum Kind {
     Bridge,
     /// A market stall: in the way.
     Stall,
+    // Cameos from other Asciiverse games, all hazards on the road.
+    /// Westering's covered wagon.
+    Wagon,
+    /// A Panzer toy tank.
+    ToyTank,
+    /// Sleighride's big red sleigh.
+    Sleigh,
+    /// A Marble Recovery marble, rolling.
+    Marble,
+    /// A uXo bomb, fuse lit, rolling along the castle stairs.
+    Bomb,
+    /// Hammurabi's granary rats.
+    Rat,
+    /// The 1D-Pong ball, very fast.
+    PongBall,
 }
 
 impl Kind {
@@ -151,6 +166,13 @@ impl Kind {
             'v' => Kind::Reeds,
             '=' => Kind::Bridge,
             'M' => Kind::Stall,
+            'W' => Kind::Wagon,
+            'P' => Kind::ToyTank,
+            'S' => Kind::Sleigh,
+            'O' => Kind::Marble,
+            'B' => Kind::Bomb,
+            'Q' => Kind::Rat,
+            'e' => Kind::PongBall,
             _ => return None,
         })
     }
@@ -159,7 +181,8 @@ impl Kind {
         use Kind::*;
         match self {
             Car | Truck | Bike | Cart | Tractor | Goose | Moto | Plow | Sled | Knight
-            | Carriage | Fire | Guard | Train => Role::Hazard,
+            | Carriage | Fire | Guard | Train | Wagon | ToyTank | Sleigh | Marble | Bomb | Rat
+            | PongBall => Role::Hazard,
             Log | Turtle | DivingTurtle | Floe | CrackingFloe | Pad | Barrel | Duck
             | DivingDuck | Bridge => Role::Floater,
             Hedge | Rock | Tree | Lamp | Cactus | House | Stall => Role::Blocker,
@@ -354,6 +377,48 @@ pub enum Death {
     TimeUp,
     /// Fell into the pond: back to the bank, nothing lost.
     Splash,
+    /// Caught by what chases him up a boss road.
+    Caught,
+}
+
+/// What chases the toad up a boss road.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum ChaseKind {
+    /// A runaway steamroller.
+    Roller,
+    /// The thaw: meltwater rising behind him.
+    Flood,
+    /// A flock of crows, low over the field.
+    Crows,
+    /// The dragon, awake, breathing fire up the stairs.
+    Dragon,
+}
+
+/// A boss road's chaser: a line that climbs from below the toad's start.
+#[derive(Clone, Copy, Debug)]
+pub struct Chase {
+    pub kind: ChaseKind,
+    /// Rows a second, once it starts.
+    pub speed: f32,
+    /// Seconds of grace before it starts.
+    pub delay: f32,
+    /// The row it starts just below.
+    pub from: f32,
+    /// When it set off.
+    pub t0: f32,
+}
+
+impl Chase {
+    /// The chaser's front, as a fractional row: everything at or below it is caught.
+    pub fn line(&self, t: f32) -> f32 {
+        self.from + 1.5 - (t - self.t0 - self.delay).max(0.0) * self.speed
+    }
+
+    /// Start (again) just below `row` at time t.
+    pub fn restart(&mut self, row: usize, t: f32) {
+        self.from = row as f32;
+        self.t0 = t;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -365,16 +430,26 @@ pub struct Level {
     pub rain: bool,
     /// For lily pads: when the toad landed on each (row, item), if lately.
     pub landed: Vec<Vec<Option<f32>>>,
+    /// A boss road's chaser.
+    pub chase: Option<Chase>,
+    /// A boss road's resting banks, where a lost life starts again.
+    pub checkpoints: Vec<usize>,
 }
 
 impl Level {
     pub fn new(rows: Vec<Lane>, pond: bool) -> Level {
         let landed = rows.iter().map(|r| vec![None; r.items.len()]).collect();
+        let h = rows.len();
+        let checkpoints = (1..h.saturating_sub(1))
+            .filter(|&r| rows[r].ground == Ground::Bank)
+            .collect();
         Level {
             rows,
             pond,
             rain: false,
             landed,
+            chase: None,
+            checkpoints,
         }
     }
 
@@ -509,9 +584,14 @@ pub struct Toad {
 
 impl Toad {
     pub fn start(lv: &Level, x: f32) -> Toad {
+        Toad::start_at(lv.height() - 1, x)
+    }
+
+    /// Sitting on `row` (a boss road's checkpoint, or the start).
+    pub fn start_at(row: usize, x: f32) -> Toad {
         Toad {
             x,
-            row: lv.height() - 1,
+            row,
             cool: 0,
             slide: None,
             facing: Dir::Up,
@@ -576,6 +656,11 @@ impl Toad {
         }
         if lv.hazard(self.row, self.x, t) {
             return Step::Died(Death::Squashed);
+        }
+        if let Some(ch) = &lv.chase
+            && self.row as f32 + 0.5 >= ch.line(t)
+        {
+            return Step::Died(Death::Caught);
         }
         step
     }
