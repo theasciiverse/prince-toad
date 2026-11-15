@@ -1673,6 +1673,85 @@ mod tests {
         assert_eq!(g.start_lives(), LIVES);
     }
 
+    /// The pond played to the end: each hop the one that keeps him dry and brings
+    /// him nearest the princess, two hops ahead; then the finale, page by page.
+    #[test]
+    fn the_pond_is_played_to_the_finale_and_the_title() {
+        let mut g = game(Start::Story(POND));
+        let mut audio = Audio::silent();
+        let mut input = Input::new();
+        g.set_phase(Phase::Play);
+        let acts = [
+            None,
+            Some(Dir::Up),
+            Some(Dir::UpLeft),
+            Some(Dir::UpRight),
+            Some(Dir::Left),
+            Some(Dir::Right),
+            Some(Dir::Down),
+            Some(Dir::DownLeft),
+            Some(Dir::DownRight),
+        ];
+        for _ in 0..60 * 60 * 4 {
+            if g.phase != Phase::Play {
+                break;
+            }
+            let p = &g.players[0];
+            if p.dead.is_none() && p.toad.cool == 0 && p.queued.is_none() {
+                let (px, prow) = g.princess_pos().unwrap();
+                let now = g.lt;
+                let mut best: Option<(f32, Option<Dir>)> = None;
+                for &a in &acts {
+                    for &b in &acts {
+                        let mut t = p.toad.clone();
+                        let mut ok = true;
+                        for k in 0..2 * HOP_TICKS as u64 {
+                            let want = if k == 0 { a } else if k == HOP_TICKS as u64 { b } else { None };
+                            if let Step::Died(_) = t.tick(&g.level, (now + k + 1) as f32 * DT, want) {
+                                ok = false;
+                                break;
+                            }
+                        }
+                        if !ok {
+                            continue;
+                        }
+                        let d = (t.row as f32 - prow as f32).abs() * 4.0 + (t.x - px).abs();
+                        if best.is_none_or(|(bd, _)| d < bd) {
+                            best = Some((d, a));
+                        }
+                    }
+                }
+                if let Some((_, Some(d))) = best {
+                    g.players[0].queued = Some((d, 0));
+                }
+            }
+            g.tick(&mut audio);
+        }
+        assert!(
+            matches!(g.phase, Phase::Finale(_)),
+            "still {:?} in the pond, {} escapes",
+            g.phase,
+            g.princess.as_ref().map_or(0, |p| p.escapes)
+        );
+        assert!(g.save.finished);
+        // the finale pages, each once its words are out, then the title
+        for _ in 0..60 * 60 * 3 {
+            if !matches!(g.phase, Phase::Finale(_)) {
+                break;
+            }
+            g.tick(&mut audio);
+            if g.lt % 30 == 0 || g.phase_t > 20.0 {
+                input.events.push(Ev::Confirm);
+                g.handle(&mut input, &mut audio);
+            }
+        }
+        assert!(
+            matches!(g.phase, Phase::Title | Phase::EnterName | Phase::Scores(_)),
+            "after the finale: {:?}",
+            g.phase
+        );
+    }
+
     #[test]
     fn the_princess_hops_away_three_times_then_waits() {
         let mut g = game(Start::Story(POND));
