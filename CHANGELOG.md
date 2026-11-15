@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0
+
+- The endless road keeps a record for every world: the quickest crossing
+  on the village lanes, the highway, the river, the winter road, the night
+  road and the castle, shown as you cross and in the high-score table
+- Rain on Moon Puddle: a hop onto the wet road slides one further
+- Kinder fast lanes where the step up was too steep: the bicycles on
+  Pasture Gate, the sleds on Mitten Pass and the dragon's fire on the
+  Dragon's Doorstep
+- Played from the first road through the pond to the last page of the
+  finale, again and again, by a player that hops itself
+
 ## 0.9.0
 
 - Whatever waits on the far side stands tall against the sky, so you can

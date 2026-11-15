@@ -2190,13 +2190,13 @@ fn scores(cv: &mut Canvas, g: &Game, b: usize) {
             .zip(g.save.records.iter())
             .map(|(n, &r)| {
                 let t = if r > 0 { crate::save::tenths(r) } else { "not yet".into() };
-                format!("{n} {t:<8}")
+                format!("{n:<8}{t:<9}")
             })
             .collect();
         let yy = inner.bottom() as i32 - 4;
         cv.text(x, yy, "Records", GOLD, None);
         for (k, chunk) in recs.chunks(3).enumerate() {
-            cv.text(x + 9, yy + k as i32, &chunk.join("   "), (150, 175, 140), None);
+            cv.text(x + 9, yy + k as i32, &chunk.join("  "), (150, 175, 140), None);
         }
     }
     cv.text(

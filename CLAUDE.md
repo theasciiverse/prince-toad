@@ -12,13 +12,15 @@ ending with the Co-Authored-By line, versions 0.x.0 while unfinished.
 v0.6.0 (trains, flies, today's road, two players together, livelier kiss
 scenes, world tunes), v0.7.0 (fog and plank crossings on the endless
 road), v0.8.0 (options, high-score tables, the kiss scenes' moment of
-hope) and v0.9.0 (the waiting kiss on the horizon, drawbridge, stalls,
-rain, squash lines, a finale that moves). v0.7.0 and later are tagged but have no release builds: GitHub
-Actions refuses jobs on the private theasciiverse repos over account
-billing. Nobody has played it yet but the solver and the demo; speeds and
-clocks want a human hand (ROADMAP.md). Waiting on David: the name check
-below, going public (hub's `tools/go-public.sh --run`, then re-push the
-newest tag), and his own play-through before 1.0.0.
+hope), v0.9.0 (the waiting kiss on the horizon, drawbridge, stalls,
+rain, squash lines, a finale that moves) and v1.0.0 (2026-11-15: a
+record per world on the endless road, rain on Moon Puddle, the steepest
+lanes eased after a scripted play-through). GitHub Actions builds the releases. Nobody has played it yet but the
+solver, the demo and the scripted players; speeds and clocks may still
+want a human hand (ROADMAP.md). Waiting on David: the name check below,
+going public (hub's `tools/go-public.sh --run`, then re-push the newest
+tag), and his own play-through (1.0.0 was tagged before it, on his
+go-ahead).
 
 ## David's notes (copied from games/prince-toad/CLAUDE.md on the main machine)
 
@@ -130,6 +132,18 @@ with the plain word; nothing found by web search so far.
   death lines; the way so far on world cards; the finale drawn by
   `render::finale` with the hope and fizzle, the crown shared, and
   "Princes: 1".
+
+## 1.0 (2026-11-15)
+
+- **Records:** `Save::records`, the quickest endless crossing per world
+  in tenths of a second (`record=w:tenths` lines), set only at the normal
+  pace and never by the demo; the caption shows the world's record, the
+  endless high-score tab lists all six.
+- `Spec::rain` puts rain on a story crossing (Moon Puddle).
+- `solver::human` (ignored test `human_report`): a short-sighted player
+  with a late eye, deaths and seconds per crossing; the tuning tool.
+- Tests `the_pond_is_played_to_the_finale_and_the_title` and
+  `the_endless_road_keeps_a_record_per_world`.
 
 ## How it works
 

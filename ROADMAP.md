@@ -27,10 +27,28 @@ The waiting kiss on the horizon, a drawbridge, market stalls, rain on
 the endless road, lines for every squash, the way so far on the world
 cards, a finale that moves.
 
-## Towards 1.0
+## 1.0.0 (2026-11-15)
 
-- **David's own play-through** of the whole story before 1.0.0.
-- **Played by people and tuned by feel:** speeds, gaps and clocks per
-  crossing, the pond's sinking time, lives.
-- **More world variety:** rain in a story crossing too, perhaps.
-- **Endless:** a record per world.
+Played through and tuned on rover, then tagged on David's go-ahead to
+tag 1.0.0 once a game is thoroughly played and tuned:
+
+- **Played through:** the demo crossed all eighteen roads in tmux from
+  Mill Lane to the Dragon's Doorstep; a test plays the pond, chasing the
+  princess on sinking pads with diagonals, to the finale and every page
+  of it to the title; the endless road, game over, a name in the table
+  and the records were played with keys in tmux, at 100x30 and 80x24.
+- **Tuned:** a short-sighted player (`solver::human`, decides four times
+  a second, looks three hops ahead and judges the traffic a little late)
+  crossed every road 24 times. The spikes it found were eased: the fast
+  bicycles on Pasture Gate (6.5 to 5.5), the sleds on Mitten Pass (7 to
+  6), the dragon's fire on the Dragon's Doorstep (14 and 16 to 12 and
+  13). The Doorstep stays the hardest road, as the last before the pond.
+- **Rain in a story crossing:** Moon Puddle.
+- **Endless:** a record per world, the quickest crossing, kept at the
+  normal pace.
+
+## Still to come
+
+- **David's own play-through** by hand. Speeds, gaps, clocks, the pond's
+  sinking time and the lives were tuned by a scripted player, not by
+  feel; his hand may still move them.

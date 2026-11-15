@@ -1,8 +1,8 @@
 #!/bin/sh
 # Records the catalog preview, asciiverse/prince-toad.cast: 100x30,
-# `prince-toad --demo --crossing 8` (the toad crosses the river by itself,
-# kisses a rubber duck, crosses the rapids, kisses a heron, and on into
-# the winter road), quit with a key after about 55 seconds.
+# `prince-toad --demo --crossing 14` (the toad crosses Moon Puddle by itself
+# in the rain at night, kisses the moon in a puddle, crosses Crow Field and
+# on into the castle), quit with a key after about 55 seconds.
 # Runs asciinema in a detached tmux pane, so nothing from this terminal gets
 # in; a throwaway HOME and state folder keep the save and log out of the way.
 #
@@ -18,7 +18,7 @@ tmux -L pt-rec new-session -d -s rec -x 100 -y 30 \
      TERM=xterm-256color COLORTERM=truecolor LANG=C.UTF-8 \
    asciinema rec --window-size 100x30 --idle-time-limit 2 \
      --capture-env TERM,COLORTERM,LANG --title 'Prince Toad' \
-     --command 'prince-toad --demo --crossing 8 --mute' $out"
+     --command 'prince-toad --demo --crossing 14 --mute' $out"
 sleep 56
 tmux -L pt-rec send-keys -t rec Enter
 sleep 2
